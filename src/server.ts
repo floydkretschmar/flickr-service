@@ -1,5 +1,6 @@
 import rateLimit from "express-rate-limit";
 import express, { Express, Request, Response } from "express";
+import cors from "cors"
 
 export default class RestServer {
     server: Express;
@@ -7,6 +8,7 @@ export default class RestServer {
 
     constructor(port: number) {
         this.server = express();
+        this.server.use(cors());
         this.port = port;
     }
     
