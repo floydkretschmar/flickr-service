@@ -31,6 +31,6 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLICKR_API_KEY: ${{ secrets.FLICKR_API_KEY }}
-          PORT: 5000
+          PORT: 3000
           REQUESTS_PER_MINUTE: 500
-        run: flyctl deploy --remote-only -a flickr-service
+        run: flyctl deploy --remote-only --config ./fly.toml
