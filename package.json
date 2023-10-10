@@ -19,6 +19,7 @@
     "moment": "^2.29.4"
   },
   "devDependencies": {
+    "@flydotio/dockerfile": "^0.4.10",
     "@types/express": "^4.17.19",
     "@types/node": "^20.8.4",
     "typescript": "^5.2.2",
