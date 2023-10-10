@@ -27,11 +27,6 @@ jobs:
       - name: Build TypeScript
         run: npm run build
 
-      - name: Set secrets for deployment in fly.io
-        env:
-          FLICKR_API_KEY: ${{ secrets.FLICKR_API_KEY }}
-        run: flyctl secrets set FLICKR_API_KEY=$FLICKR_API_KEY
-
       - name: Deploy to Fly.io
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
