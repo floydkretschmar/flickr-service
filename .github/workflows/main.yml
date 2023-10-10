@@ -21,22 +21,16 @@ jobs:
         with:
           node-version: 14
 
-      - name: Create and populate .env file
-        env:
-          FLICKR_API_KEY: ${{ secrets.FLICKR_API_KEY }}
-          PORT: 3000
-          REQUESTS_PER_MINUTE: 500
-        run: |
-          touch .env
-          echo FLICKR_API_KEY="$FLICKR_API_KEY" >> .env
-          echo PORT="$PORT" >> .env
-          echo REQUESTS_PER_MINUTE="$REQUESTS_PER_MINUTE" >> .env
-
       - name: Install dependencies
         run: npm install
 
       - name: Build TypeScript
         run: npm run build
+
+      - name: Set secrets for deployment in fly.io
+        env:
+          FLICKR_API_KEY: ${{ secrets.FLICKR_API_KEY }}
+        run: flyctl secrets set FLICKR_API_KEY=$FLICKR_API_KEY
 
       - name: Deploy to Fly.io
         env:
