@@ -19,5 +19,5 @@ primary_region = "ams"
 [env]
   PORT=3000
   REQUESTS_PER_MINUTE=500
-  FLICKR_BASE_URL="https://api.flickr.com/services/rest";
-  ALLOWED_REQUEST_ORIGIN_URLS=["https://www.floydkretschmar.de"];
+  FLICKR_BASE_URL="https://api.flickr.com/services/rest"
+  ALLOWED_REQUEST_ORIGIN_URLS=["https://www.floydkretschmar.de"]
