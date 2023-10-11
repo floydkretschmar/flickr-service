@@ -8,7 +8,17 @@ export default class RestServer {
 
     constructor(port: number, allowedOriginUrls: Array<string>) {
         this.server = express();
-        this.server.use(cors({origin: allowedOriginUrls}));
+        var corsOptions = {
+            origin: (origin: any, callback: (err: Error | null, origin?: any) => void): void => {
+              if (allowedOriginUrls.indexOf(origin) !== -1) {
+                callback(null, true)
+              } else {
+                callback(new Error('Not allowed by CORS'))
+              }
+            }
+          }
+
+        this.server.use(cors(corsOptions));
         this.port = port;
     }
     
