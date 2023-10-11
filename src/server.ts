@@ -6,9 +6,9 @@ export default class RestServer {
     server: Express;
     port: number;
 
-    constructor(port: number) {
+    constructor(port: number, allowedOriginUrls: Array<string>) {
         this.server = express();
-        this.server.use(cors());
+        this.server.use(cors({origin: allowedOriginUrls}));
         this.port = port;
     }
     

@@ -1,4 +1,4 @@
-name: CI/CD to fly.io
+name: CI/CD pipeline for building source and deploying to fly.io
 
 on:
   push:

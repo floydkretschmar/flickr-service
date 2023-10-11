@@ -8,17 +8,18 @@ export type FlickrPhoto = {
 }
 
 export default class FlickrApiService {
-    private static BASE_URL = "https://api.flickr.com/services/rest";
     private apiKey: string;
+    private apiUrl: string;
 
-    constructor(apiKey: string) {
+    constructor(apiKey: string, apiUrl: string) {
         this.apiKey = apiKey;
+        this.apiUrl = apiUrl;
      }
 
     async fetchPhotosFromAlbum(albumId: string, pageNumber: number, pageCount: number): Promise<AxiosResponse<FlickrResponse>> {
         return await axios({
             method: 'get',
-            url: FlickrApiService.BASE_URL,
+            url: this.apiUrl,
             params: {
                 method: 'flickr.photosets.getPhotos',
                 api_key: this.apiKey,

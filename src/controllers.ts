@@ -11,7 +11,7 @@ export interface Photo { id: string, title: string, dateWhenTaken: string, owner
 export interface Image { url: string, width: number, height: number }
 
 export const getPicturesController = async (request: Request<GetPhotoRequestDictionary, GetPhotoResponseBody, GetPhotoRequestBody, GetPhotoRequestQuery>, response: Response<GetPhotoResponseBody>): Promise<void> => {
-    const apiService = new FlickrApiService(process.env.FLICKR_API_KEY);
+    const apiService = new FlickrApiService(process.env.FLICKR_API_KEY, process.env.FLICKR_BASE_URL);
     const page = request.query.page ?? 1;
     const limit = request.query.limit ?? 10;
 
