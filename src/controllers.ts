@@ -11,11 +11,13 @@ export interface Photo { id: string, title: string, dateWhenTaken: string, owner
 export interface Image { url: string, width: number, height: number }
 
 export const getPicturesController = async (request: Request<GetPhotoRequestDictionary, GetPhotoResponseBody, GetPhotoRequestBody, GetPhotoRequestQuery>, response: Response<GetPhotoResponseBody>): Promise<void> => {
-    const apiService = new FlickrApiService(process.env.FLICKR_API_KEY, process.env.FLICKR_BASE_URL);
-    const page = request.query.page ?? 1;
-    const limit = request.query.limit ?? 10;
+  const apiService = new FlickrApiService(process.env.FLICKR_API_KEY, process.env.FLICKR_BASE_URL);
+  const page = request.query.page ?? 1;
+  const limit = request.query.limit ?? 10;
 
-    const flickrResponse = await apiService.fetchPhotosFromAlbum(request.params.albumId, page, limit)
+  const flickrResponse = await apiService.fetchPhotosFromAlbum(request.params.albumId, page, limit)
+
+  if (flickrResponse.data.stat === "ok") {
     const mappedImages = flickrResponse.data.photoset.photo.map((p: FlickrPhoto) => ({
       id: p.id,
       dateWhenTaken: moment(p.datetaken).format("Do MMMM YYYY"),
@@ -33,8 +35,13 @@ export const getPicturesController = async (request: Request<GetPhotoRequestDict
         url: p.url_l
       } as Image
     }) as Photo);
+
     response.send({
       data: mappedImages,
       limit: limit,
       page: page
-    })};
+    })
+  }
+  response.statusMessage = "No results found for this page."
+  response.status(404).end();
+};
