@@ -30,4 +30,4 @@ jobs:
       - name: Deploy to Fly.io
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --remote-only -a flickr-service
+        run: flyctl deploy --local-only -a flickr-service
