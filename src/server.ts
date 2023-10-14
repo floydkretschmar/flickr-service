@@ -19,7 +19,6 @@ export default class RestServer {
           }
 
         this.server.use(cors(corsOptions));
-        this.server.set("trust proxy", "127.0.0.1")
         this.port = port;
     }
     
