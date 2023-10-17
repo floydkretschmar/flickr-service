@@ -2,7 +2,7 @@
 import axios, { AxiosResponse } from 'axios';
 
 export type FlickrResponse = { stat: string, photoset: FlickrPhotoset }
-export type FlickrPhotoset = { photo: Array<FlickrPhoto> }
+export type FlickrPhotoset = { photo: Array<FlickrPhoto>, pages: number }
 export type FlickrPhoto = {
     id: string, title: string, datetaken: string, ownername: string, views: string, url_l: string, height_l: number, width_l: number, url_o: string, height_o: number, width_o: number;
 }

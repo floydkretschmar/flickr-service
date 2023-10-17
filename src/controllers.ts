@@ -5,7 +5,7 @@ import moment from 'moment';
 export type GetPhotoRequestDictionary = { albumId: string }
 export type GetPhotoRequestBody = {}
 export type GetPhotoRequestQuery = { page?: number, limit?: number }
-export type GetPhotoResponseBody = { page: number, limit: number, data: Array<Photo> }
+export type GetPhotoResponseBody = { page: number, limit: number, data: Array<Photo>, totalPages: number }
 
 export interface Photo { id: string, title: string, dateWhenTaken: string, owner: string, views: number, thumbnail: Image, picture: Image }
 export interface Image { url: string, width: number, height: number }
@@ -36,11 +36,13 @@ export const getPicturesController = async (request: Request<GetPhotoRequestDict
       } as Image
     }) as Photo);
 
-    response.send({
+    const res = {
       data: mappedImages,
       limit: limit,
-      page: page
-    })
+      page: page, 
+      totalPages: flickrResponse.data.photoset.pages
+    } as GetPhotoResponseBody;
+    response.send(res);
   }
   response.statusMessage = "No results found for this page."
   response.status(404).end();
