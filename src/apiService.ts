@@ -8,8 +8,8 @@ export type FlickrPhoto = {
 }
 
 export default class FlickrApiService {
-    private apiKey: string;
-    private apiUrl: string;
+    private readonly apiKey: string;
+    private readonly apiUrl: string;
 
     constructor(apiKey: string, apiUrl: string) {
         this.apiKey = apiKey;
@@ -17,19 +17,20 @@ export default class FlickrApiService {
      }
 
     async fetchPhotosFromAlbum(albumId: string, pageNumber: number, pageCount: number): Promise<AxiosResponse<FlickrResponse>> {
-        return await axios({
+        return axios({
             method: 'get',
             url: this.apiUrl,
             params: {
                 method: 'flickr.photosets.getPhotos',
                 api_key: this.apiKey,
                 photoset_id: albumId,
+                user_id: "199290367@N03",
                 extras: 'url_l, url_o, owner_name, date_taken, views',
                 page: pageNumber,
                 format: 'json',
                 nojsoncallback: 1,
                 per_page: pageCount,
             }
-        })
+        });
     }
 }
