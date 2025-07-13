@@ -25,9 +25,9 @@ export const getPicturesController = async (request: Request<GetPhotoRequestDict
         title: p.title,
         views: parseInt(p.views),
         picture: {
-          height: p.height_o,
-          width: p.width_o,
-          url: p.url_o
+          height: p.height_l,
+          width: p.width_l,
+          url: p.url_l
         } as Image,
         thumbnail: {
           height: p.height_l,
