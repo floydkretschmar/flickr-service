@@ -10,7 +10,7 @@ export default class RestServer {
         this.server = express();
         var corsOptions = {
             origin: (origin: any, callback: (err: Error | null, origin?: any) => void): void => {
-              if (allowedOriginUrls.indexOf(origin) !== -1) {
+              if (allowedOriginUrls.indexOf(origin) !== -1 || allowedOriginUrls.includes("*")) {
                 callback(null, true)
               } else {
                 callback(new Error('Not allowed by CORS'))

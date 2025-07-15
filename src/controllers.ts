@@ -49,6 +49,7 @@ export const getPicturesController = async (request: Request<GetPhotoRequestDict
   }
   catch (error) {
     response.statusMessage = "An error occurred while fetching the photos."
+    console.log(error)
     response.status(500).end();
   }
 };
