@@ -30,9 +30,9 @@ export const getPicturesController = async (request: Request<GetPhotoRequestDict
           url: p.url_l
         } as Image,
         thumbnail: {
-          height: p.height_l,
-          width: p.width_l,
-          url: p.url_l
+          height: p.height_m,
+          width: p.width_m,
+          url: p.url_m
         } as Image
       }) as Photo);
 
