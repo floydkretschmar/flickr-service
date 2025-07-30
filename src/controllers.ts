@@ -1,55 +1,58 @@
-import { Request, Response } from 'express';
-import apiService, { FlickrPhoto } from './apiService';
-import moment from 'moment';
+import { Request, Response } from "express";
+import { Photo, PhotoResult, PhotoService } from "./photoService";
 
-export type GetPhotoRequestDictionary = { albumId: string }
-export type GetPhotoRequestBody = {}
-export type GetPhotoRequestQuery = { page?: number, limit?: number }
-export type GetPhotoResponseBody = { page: number, limit: number, data: Array<Photo>, totalPages: number }
+export type GetPhotoRequestDictionary = { albumId: string };
+export type GetPhotoRequestBody = {};
+export type GetPhotoRequestQuery = { page?: number; limit?: number };
+export type GetPhotoResponseBody = {
+  page: number;
+  limit: number;
+  data: Array<Photo>;
+  totalPages: number;
+};
 
-export interface Photo { id: string, title: string, dateWhenTaken: string, owner: string, views: number, thumbnail: Image, picture: Image }
-export interface Image { url: string, width: number, height: number }
-
-export const getPicturesController = async (request: Request<GetPhotoRequestDictionary, GetPhotoResponseBody, GetPhotoRequestBody, GetPhotoRequestQuery>, response: Response<GetPhotoResponseBody>): Promise<void> => {
+export const getPicturesController = async (
+  photoService: PhotoService,
+  request: Request<
+    GetPhotoRequestDictionary,
+    GetPhotoResponseBody,
+    GetPhotoRequestBody,
+    GetPhotoRequestQuery
+  >,
+  response: Response<GetPhotoResponseBody>,
+): Promise<void> => {
   const page = request.query.page ?? 1;
   const limit = request.query.limit ?? 10;
 
+  if (page < 1) {
+    response.statusMessage = "Page index has to be 1 or larger";
+    response.status(422).end();
+    return;
+  }
+
   try {
-    const flickrResponse = await apiService.fetchPhotosFromAlbum(request.params.albumId, page, limit)
+    const result: PhotoResult = await photoService.getPhotos(
+      request.params.albumId,
+      page,
+      limit,
+    );
 
-    if (flickrResponse.stat === "ok") {
-      const mappedImages = flickrResponse.photoset.photo.map((p: FlickrPhoto) => ({
-        id: p.id,
-        dateWhenTaken: moment(p.datetaken).format("Do MMMM YYYY"),
-        owner: p.ownername,
-        title: p.title,
-        views: parseInt(p.views),
-        picture: {
-          height: p.height_l,
-          width: p.width_l,
-          url: p.url_l
-        } as Image,
-        thumbnail: {
-          height: p.height_m,
-          width: p.width_m,
-          url: p.url_m
-        } as Image
-      }) as Photo);
-
+    if (result.photos.length > 0) {
       const res = {
-        data: mappedImages,
+        data: result.photos,
         limit: limit,
         page: page,
-        totalPages: flickrResponse.photoset.pages
+        totalPages: result.totalPages,
       } as GetPhotoResponseBody;
       response.send(res);
+      return;
     }
-    response.statusMessage = "No results found for this page."
+
+    response.statusMessage = "No results found for this page";
     response.status(404).end();
-  }
-  catch (error) {
-    response.statusMessage = "An error occurred while fetching the photos."
-    console.log(error)
+  } catch (error) {
+    response.statusMessage = "An error occurred while fetching the photos";
+    console.log(error);
     response.status(500).end();
   }
 };
