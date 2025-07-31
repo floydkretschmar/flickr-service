@@ -87,7 +87,6 @@ export class PhotoService {
       /[äöü'()]+/gi,
       "",
     );
-    console.log(titlePart);
     return `${this.bucketBaseUrl}/${titlePart}_${id}_o.jpg`;
   }
 }
