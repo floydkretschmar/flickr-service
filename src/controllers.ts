@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Photo, PhotoResult, PhotoService } from "./photoService";
+import { Photo, PhotoResult, PhotoService } from "./photoService.js";
 
 export type GetPhotoRequestDictionary = { albumId: string };
 export type GetPhotoRequestBody = {};

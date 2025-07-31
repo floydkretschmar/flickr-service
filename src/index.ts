@@ -1,14 +1,14 @@
 import dotenv from "dotenv";
-import Server from "./server";
+import Server from "./server.js";
 import {
   GetPhotoRequestBody,
   GetPhotoRequestDictionary,
   GetPhotoRequestQuery,
   GetPhotoResponseBody,
   getPicturesController,
-} from "./controllers";
-import { PhotoService } from "./photoService";
-import { FlickrService } from "./flickrService";
+} from "./controllers.js";
+import { PhotoService } from "./photoService.js";
+import { FlickrService } from "./flickrService.js";
 import express, { Request, Response } from "express";
 
 dotenv.config();
@@ -18,7 +18,10 @@ const flickrService = new FlickrService(
   process.env.FLICKR_API_KEY,
   process.env.FLICKR_BASE_URL,
 );
-const photoService = new PhotoService(flickrService);
+const photoService = new PhotoService(
+  flickrService,
+  process.env.BUCKET_BASE_URL,
+);
 
 server.configureCORS(process.env.ALLOWED_REQUEST_ORIGIN_URLS);
 server.get(

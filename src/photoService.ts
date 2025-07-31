@@ -1,5 +1,6 @@
-import { FlickrPhoto, FlickrResponse, FlickrService } from "./flickrService";
-import moment from "moment/moment";
+import { FlickrPhoto, FlickrService } from "./flickrService.js";
+
+import moment from "moment";
 
 export interface Photo {
   id: string;
@@ -7,10 +8,14 @@ export interface Photo {
   dateWhenTaken: string;
   owner: string;
   views: number;
-  thumbnail: Image;
+  thumbnail: Thumbnail;
   picture: Image;
 }
 export interface Image {
+  url: string;
+  fallback: string;
+}
+export interface Thumbnail {
   url: string;
   width: number;
   height: number;
@@ -22,9 +27,11 @@ export interface PhotoResult {
 
 export class PhotoService {
   private readonly flickrService: FlickrService;
+  private readonly bucketBaseUrl: string;
 
-  constructor(flickrService: FlickrService) {
+  constructor(flickrService: FlickrService, bucketBaseUrl: string) {
     this.flickrService = flickrService;
+    this.bucketBaseUrl = bucketBaseUrl;
   }
 
   public async getPhotos(
@@ -40,26 +47,25 @@ export class PhotoService {
 
     let photos: Photo[] = [];
     if (flickrResponse.stat === "ok") {
-      photos = flickrResponse.photoset.photo.map(
-        (p: FlickrPhoto) =>
-          ({
-            id: p.id,
-            dateWhenTaken: moment(p.datetaken).format("Do MMMM YYYY"),
-            owner: p.ownername,
-            title: p.title,
-            views: parseInt(p.views),
-            picture: {
-              height: p.height_l,
-              width: p.width_l,
-              url: p.url_l,
-            } as Image,
-            thumbnail: {
-              height: p.height_m,
-              width: p.width_m,
-              url: p.url_m,
-            } as Image,
-          }) as Photo,
-      );
+      photos = flickrResponse.photoset.photo.map((p: FlickrPhoto) => {
+        const fullResolutionUrl = this.getFullResolutionUrl(p.title, p.id);
+        return {
+          id: p.id,
+          dateWhenTaken: moment(p.datetaken).format("Do MMMM YYYY"),
+          owner: p.ownername,
+          title: p.title,
+          views: parseInt(p.views),
+          picture: {
+            url: fullResolutionUrl,
+            fallback: p.url_l,
+          } as Image,
+          thumbnail: {
+            height: p.height_m,
+            width: p.width_m,
+            url: p.url_m,
+          } as Thumbnail,
+        } as Photo;
+      });
 
       return {
         photos: photos,
@@ -71,5 +77,17 @@ export class PhotoService {
       photos: [],
       totalPages: -1,
     } as PhotoResult;
+  }
+
+  private getFullResolutionUrl(title: string, id: string) {
+    const titleWithoutSpecialCharacters: string = title
+      .toLowerCase()
+      .replaceAll(/[`\s~!@#$%^&*_|+\-=?;:",.<>\{\}\[\]\\\/]+/gi, "-");
+    const titlePart: string = titleWithoutSpecialCharacters.replaceAll(
+      /[äöü'()]+/gi,
+      "",
+    );
+    console.log(titlePart);
+    return `${this.bucketBaseUrl}/${titlePart}_${id}_o.jpg`;
   }
 }

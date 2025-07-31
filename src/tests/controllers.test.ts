@@ -6,9 +6,9 @@ import {
   GetPhotoRequestQuery,
   GetPhotoResponseBody,
   getPicturesController,
-} from "../controllers";
+} from "../controllers.js";
 import { Request, Response } from "express";
-import { Image, Photo, PhotoService } from "../photoService";
+import { Image, Photo, PhotoService, Thumbnail } from "../photoService.js";
 import { getMockRes } from "vitest-mock-express";
 
 describe("Pictures controller", () => {
@@ -46,15 +46,14 @@ describe("Pictures controller", () => {
       title: "title",
       views: 10,
       picture: {
-        height: 1000,
-        width: 500,
-        url: "url_p",
+        fallback: "url_l",
+        url: "bucketUrl/title_id1_o.jpg",
       } as Image,
       thumbnail: {
         height: 100,
         width: 50,
         url: "url_t",
-      } as Image,
+      } as Thumbnail,
     } as Photo;
 
     getPhotos.mockReturnValue({

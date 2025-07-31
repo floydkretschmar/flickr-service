@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FlickrResponse, FlickrService } from "../flickrService";
-import Server from "../server";
+import Server from "../server.js";
 import { Express } from "express";
 
 vi.mock("cors", async () => {

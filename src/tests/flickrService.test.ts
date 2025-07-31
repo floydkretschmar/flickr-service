@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FlickrResponse, FlickrService } from "../flickrService";
+import { FlickrResponse, FlickrService } from "../flickrService.js";
 
 global.fetch = vi.fn();
 

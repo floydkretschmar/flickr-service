@@ -1,28 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FlickrResponse, FlickrService } from "../flickrService";
-import { Image, Photo, PhotoService } from "../photoService";
-import moment from "moment";
+import { FlickrResponse, FlickrService } from "../flickrService.js";
+import { Image, Photo, PhotoService, Thumbnail } from "../photoService.js";
 
 describe("Photo service", () => {
   const fetchPhotosFromAlbum = vi.fn();
   const flickrService: Partial<FlickrService> = {
     fetchPhotosFromAlbum: fetchPhotosFromAlbum,
   };
+  const photoService: PhotoService = new PhotoService(
+    flickrService as FlickrService,
+    "bucketUrl",
+  );
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
   it("should return formatted photo result if flickr api returns success", async () => {
-    const photoService: PhotoService = new PhotoService(
-      flickrService as FlickrService,
-    );
     const flickrResponse: FlickrResponse = {
       stat: "ok",
       photoset: {
         photo: [
           {
             id: "id",
-            title: "title",
+            title: "title with . space",
             datetaken: "2020-01-15",
             ownername: "ownername",
             views: "11",
@@ -43,18 +43,17 @@ describe("Photo service", () => {
         id: "id",
         dateWhenTaken: "15th January 2020",
         owner: "ownername",
-        title: "title",
+        title: "title with . space",
         views: 11,
         picture: {
-          height: 1000,
-          width: 500,
-          url: "url_l",
+          url: "bucketUrl/title-with-space_id_o.jpg",
+          fallback: "url_l",
         } as Image,
         thumbnail: {
           height: 200,
           width: 20,
           url: "url_m",
-        } as Image,
+        } as Thumbnail,
       } as Photo,
     ];
 
@@ -67,9 +66,6 @@ describe("Photo service", () => {
   });
 
   it("should return empty result if flickr api returns error", async () => {
-    const photoService: PhotoService = new PhotoService(
-      flickrService as FlickrService,
-    );
     const flickrResponse: Partial<FlickrResponse> = {
       stat: "error",
     };
