@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 
 import {
   verifyCiWorkflow,
+  verifyDependabotAutomergeWorkflow,
   verifyDependabotConfig,
   verifyDependencyPolicy,
   verifyDockerfile,
@@ -25,6 +26,8 @@ function validRepository() {
         "Node `24.16.0`, npm `11.13.0`, Docker base `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0`, RTK `v0.42.4`, context-mode `1.0.162`, `actions/checkout@v6`, `actions/setup-node@v6`, `superfly/flyctl-actions/setup-flyctl@v1`, `dependabot/fetch-metadata@v3`, `cors@2.8.6`, `dotenv@17.4.2`, `express@5.2.1`, `express-rate-limit@8.5.2`, `moment@2.30.1`, `@types/cors@2.8.19`, `@types/express@5.0.6`, `@types/node@24.13.2`, `@vitest/coverage-v8@4.1.8`, `prettier@3.8.4`, `typescript@6.0.3`, `vitest@4.1.8`, `vitest-mock-express@2.2.0`.",
       Dockerfile: validDockerfile(),
       ".github/dependabot.yml": validDependabotConfig(),
+      ".github/workflows/dependabot-automerge.yml":
+        validDependabotAutomergeWorkflow(),
       ".github/workflows/pipeline.yml": validCiWorkflow(),
       "package-lock.json": JSON.stringify({
         lockfileVersion: 3,
@@ -242,6 +245,102 @@ jobs:
 `;
 }
 
+function validDependabotAutomergeWorkflow() {
+  return `name: Dependabot Automerge
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+jobs:
+  metadata:
+    if: github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      statuses: write
+    steps:
+      - uses: dependabot/fetch-metadata@v3
+        id: metadata
+      - name: Write metadata status
+        env:
+          GH_TOKEN: \${{ github.token }}
+          HEAD_SHA: \${{ github.event.pull_request.head.sha }}
+          ECOSYSTEM: \${{ steps.metadata.outputs.package-ecosystem }}
+          DIRECTORY: \${{ steps.metadata.outputs.directory }}
+          UPDATE_TYPE: \${{ steps.metadata.outputs.update-type }}
+        run: |
+          DESCRIPTION="$(jq -cn --arg ecosystem "$ECOSYSTEM" --arg directory "$DIRECTORY" --arg updateType "$UPDATE_TYPE" '{ecosystem:$ecosystem,directory:$directory,updateType:$updateType}')"
+          test "\${#DESCRIPTION}" -le 140
+          gh api repos/\${{ github.repository }}/statuses/"$HEAD_SHA" -f state=success -f context=dependabot/metadata -f description="$DESCRIPTION"
+
+  automerge:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+      statuses: read
+    steps:
+      - name: Enable safe Dependabot auto-merge
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          REQUIRED_CHECKS='["ci/install","ci/audit-signatures","ci/audit-vulnerabilities","ci/format","ci/build","ci/test-coverage"]'
+          PR_COUNT="$(jq '[.workflow_run.pull_requests[]? | select(.number != null)] | length' "$GITHUB_EVENT_PATH")"
+          if [ "$PR_COUNT" -ne 1 ]; then exit 0; fi
+          PR_NUMBER="$(jq -r '.workflow_run.pull_requests | map(select(.number != null)) | .[0].number' "$GITHUB_EVENT_PATH")"
+          PR="$(gh api repos/\${{ github.repository }}/pulls/"$PR_NUMBER")"
+          PR_AUTHOR="$(jq -r '.user.login // ""' <<<"$PR")"
+          PR_STATE="$(jq -r '.state // ""' <<<"$PR")"
+          if [ "$PR_AUTHOR" != "dependabot[bot]" ] || [ "$PR_STATE" != "open" ]; then exit 0; fi
+          HEAD_SHA="$(jq -r '.head.sha // ""' <<<"$PR")"
+          if [ -z "$HEAD_SHA" ]; then exit 0; fi
+          STATUSES="$(gh api repos/\${{ github.repository }}/commits/"$HEAD_SHA"/statuses)"
+          CHECKS="$(gh api repos/\${{ github.repository }}/commits/"$HEAD_SHA"/check-runs)"
+          node --input-type=module - "$HEAD_SHA" "$STATUSES" "$CHECKS" "$REQUIRED_CHECKS" <<'NODE'
+          const [headSha, statusesJson, checksJson, requiredChecksJson] = process.argv.slice(2);
+          const statuses = JSON.parse(statusesJson);
+          const checks = JSON.parse(checksJson).check_runs ?? [];
+          const requiredChecks = JSON.parse(requiredChecksJson);
+          const matchingStatuses = statuses
+            .filter((status) => status.context === "dependabot/metadata")
+            .map((status, index) => ({ ...status, index, timestamp: Date.parse(status.created_at ?? "") }));
+          const finiteTimestamps = matchingStatuses.map((status) => status.timestamp).filter(Number.isFinite);
+          const latestTimestamp = finiteTimestamps.length ? Math.max(...finiteTimestamps) : undefined;
+          const latestStatuses = latestTimestamp === undefined
+            ? matchingStatuses.slice(-1)
+            : matchingStatuses.filter((status) => status.timestamp === latestTimestamp);
+          const metadataStatus = latestStatuses.every((status) => status.state === latestStatuses[0]?.state && status.description === latestStatuses[0]?.description)
+            ? latestStatuses[0]
+            : undefined;
+          if (!metadataStatus || metadataStatus.description.length > 140) process.exit(1);
+          if (metadataStatus.state !== "success") process.exit(1);
+          const metadata = JSON.parse(metadataStatus.description);
+          if (metadataStatus.description !== JSON.stringify(metadata)) process.exit(1);
+          const keys = Object.keys(metadata).sort().join(",");
+          if (keys !== "directory,ecosystem,updateType") process.exit(1);
+          if (!["ecosystem", "directory", "updateType"].every((key) => typeof metadata[key] === "string")) process.exit(1);
+          if (metadata.updateType.startsWith("security-update:")) process.exit(1);
+          const allowedNpmOrDocker = ["npm", "npm_and_yarn", "docker"].includes(metadata.ecosystem) && ["version-update:semver-patch", "version-update:semver-minor"].includes(metadata.updateType);
+          const allowedActions = metadata.ecosystem === "github-actions" && metadata.updateType.startsWith("version-update:");
+          if (!allowedNpmOrDocker && !allowedActions) process.exit(1);
+          const greenChecks = new Set(checks.filter((check) => check.head_sha === headSha && check.conclusion === "success").map((check) => check.name));
+          if (!requiredChecks.every((check) => greenChecks.has(check))) process.exit(1);
+          NODE
+          gh pr merge "$PR_NUMBER" --auto --match-head-commit "$HEAD_SHA"
+`;
+}
+
 function mutateJson(
   repository: ReturnType<typeof validRepository>,
   path: string,
@@ -260,6 +359,47 @@ async function writeRepositoryFixture(
     await mkdir(join(root, path, ".."), { recursive: true });
     writeFileSync(join(root, path), content);
   }
+}
+
+function workflowNodeDecisionBlock(workflow: string) {
+  const match = workflow.match(
+    /node --input-type=module[\s\S]*?<<'NODE'\n([\s\S]*?)\n\s*NODE/,
+  );
+  if (!match) throw new Error("workflow inline Node decision block not found");
+  return match[1].replace(/^ {10}/gm, "");
+}
+
+function runWorkflowDecision({
+  statuses,
+  checks,
+}: {
+  statuses: unknown[];
+  checks: { name: string; conclusion?: string; head_sha?: string }[];
+}) {
+  return spawnSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-",
+      "head",
+      JSON.stringify(statuses),
+      JSON.stringify({ check_runs: checks }),
+      JSON.stringify([
+        "ci/install",
+        "ci/audit-signatures",
+        "ci/audit-vulnerabilities",
+        "ci/format",
+        "ci/build",
+        "ci/test-coverage",
+      ]),
+    ],
+    {
+      encoding: "utf8",
+      input: workflowNodeDecisionBlock(
+        readFileSync(".github/workflows/dependabot-automerge.yml", "utf8"),
+      ),
+    },
+  );
 }
 
 describe("dependency policy verifier", () => {
@@ -644,6 +784,169 @@ describe("dependency policy verifier", () => {
         "Dependabot config must include docker updates at /",
         "Dependabot config must set schedule.interval for every ecosystem",
         "Dependabot config must set cooldown.default-days: 7 for every ecosystem",
+      ]),
+    );
+  });
+
+  it("validates safe Dependabot automerge workflow shape and executable decisions", () => {
+    expect(
+      verifyDependabotAutomergeWorkflow(validDependabotAutomergeWorkflow())
+        .errors,
+    ).toEqual([]);
+
+    const checks = [
+      "ci/install",
+      "ci/audit-signatures",
+      "ci/audit-vulnerabilities",
+      "ci/format",
+      "ci/build",
+      "ci/test-coverage",
+    ].map((name) => ({ name, conclusion: "success", head_sha: "head" }));
+    const statuses = [
+      {
+        context: "dependabot/metadata",
+        state: "success",
+        description:
+          '{"ecosystem":"npm","directory":"/","updateType":"version-update:semver-minor"}',
+      },
+    ];
+
+    expect(runWorkflowDecision({ statuses, checks }).status).toBe(0);
+
+    for (const updateType of [
+      "version-update:semver-patch",
+      "version-update:semver-minor",
+    ]) {
+      const npmAndYarnStatuses = [
+        {
+          context: "dependabot/metadata",
+          state: "success",
+          description: JSON.stringify({
+            ecosystem: "npm_and_yarn",
+            directory: "/",
+            updateType,
+          }),
+        },
+      ];
+
+      expect(
+        runWorkflowDecision({ statuses: npmAndYarnStatuses, checks }).status,
+      ).toBe(0);
+    }
+    expect(
+      runWorkflowDecision({
+        statuses: [
+          statuses[0],
+          { ...statuses[0], state: "failure", description: "stale" },
+        ],
+        checks,
+      }).status,
+    ).toBe(1);
+    expect(
+      runWorkflowDecision({
+        statuses: [{ ...statuses[0], state: "failure" }, statuses[0]],
+        checks,
+      }).status,
+    ).toBe(0);
+    expect(
+      runWorkflowDecision({
+        statuses: [
+          {
+            ...statuses[0],
+            created_at: "2026-06-13T10:00:00Z",
+            state: "success",
+          },
+          {
+            ...statuses[0],
+            created_at: "2026-06-13T09:00:00Z",
+            state: "failure",
+          },
+        ],
+        checks,
+      }).status,
+    ).toBe(0);
+    expect(
+      runWorkflowDecision({
+        statuses: [
+          {
+            ...statuses[0],
+            created_at: "2026-06-13T10:00:00Z",
+            state: "success",
+          },
+          {
+            ...statuses[0],
+            created_at: "2026-06-13T10:00:00Z",
+            state: "failure",
+          },
+        ],
+        checks,
+      }).status,
+    ).toBe(1);
+    expect(
+      runWorkflowDecision({
+        statuses: [
+          {
+            ...statuses[0],
+            created_at: "2026-06-13T10:00:00Z",
+            state: "success",
+          },
+          {
+            ...statuses[0],
+            created_at: "2026-06-13T10:00:00Z",
+            state: "failure",
+          },
+        ],
+        checks,
+      }).status,
+    ).toBe(1);
+
+    for (const [ecosystem, updateType] of [
+      ["npm", "version-update:semver-major"],
+      ["npm_and_yarn", "version-update:semver-major"],
+      ["npm_and_yarn", "security-update:semver-patch"],
+      ["npm_and_yarn", "unknown"],
+      ["docker", "security-update:semver-patch"],
+      ["github-actions", "security-update:semver-minor"],
+      ["terraform", "version-update:semver-patch"],
+      ["npm", "unknown"],
+    ]) {
+      expect(
+        runWorkflowDecision({
+          statuses: [
+            {
+              context: "dependabot/metadata",
+              state: "success",
+              description: JSON.stringify({
+                ecosystem,
+                directory: "/",
+                updateType,
+              }),
+            },
+          ],
+          checks,
+        }).status,
+      ).toBe(1);
+    }
+
+    expect(
+      runWorkflowDecision({ statuses, checks: checks.slice(1) }).status,
+    ).toBe(1);
+
+    expect(
+      verifyDependabotAutomergeWorkflow(
+        validDependabotAutomergeWorkflow()
+          .replace("pull-requests: read\n      statuses: write", "")
+          .replace(' --match-head-commit "$HEAD_SHA"', "")
+          .replace(
+            "- uses: dependabot/fetch-metadata@v3",
+            "- uses: actions/checkout@v6",
+          ),
+      ).errors,
+    ).toEqual(
+      expect.arrayContaining([
+        "Dependabot automerge metadata job must declare exact permissions",
+        "Dependabot automerge workflow must not check out code",
+        "Dependabot automerge must protect against stale heads",
       ]),
     );
   });

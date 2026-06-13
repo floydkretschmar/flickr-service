@@ -89,6 +89,7 @@ const trackedActionNames = [
   "actions/setup-node",
   "superfly/flyctl-actions/setup-flyctl",
 ];
+const automergeTrackedActionNames = ["dependabot/fetch-metadata"];
 const dependabotEcosystems = ["npm", "docker", "github-actions"];
 const dependabotScheduleIntervals = [
   "daily",
@@ -142,12 +143,168 @@ export function verifyDependencyPolicy(repository = readRepository()) {
     ...verifyDependabotConfig(readFile(repository, ".github/dependabot.yml"))
       .errors,
   );
+  errors.push(
+    ...verifyDependabotAutomergeWorkflow(
+      readFile(repository, ".github/workflows/dependabot-automerge.yml"),
+    ).errors,
+  );
   verifyRequiredLines(
     errors,
     "docs/PROJECT.md",
     readFile(repository, "docs/PROJECT.md"),
     [...documentedMatrix, ...documentedPackageTargetDependencies],
   );
+
+  return { errors };
+}
+
+export function verifyDependabotAutomergeWorkflow(content) {
+  const errors = [];
+  const activeContent = uncommentedContent(content);
+  const metadataJob = ciJobContent(activeContent, "metadata");
+  const automergeJob = ciJobContent(activeContent, "automerge");
+
+  if (!/^\s*pull_request_target:\s*$/m.test(activeContent)) {
+    errors.push("Dependabot automerge metadata must use pull_request_target");
+  }
+  for (const type of ["opened", "reopened", "synchronize"]) {
+    expectIncludes(
+      errors,
+      activeContent,
+      `- ${type}`,
+      `Dependabot automerge metadata must run for ${type}`,
+    );
+  }
+  expectIncludes(
+    errors,
+    activeContent,
+    "workflow_run:",
+    "Dependabot automerge must rerun after CI completion",
+  );
+  expectIncludes(
+    errors,
+    activeContent,
+    "- CI",
+    "Dependabot automerge must wait for the CI workflow",
+  );
+  expectIncludes(
+    errors,
+    metadataJob,
+    "github.actor == 'dependabot[bot]'",
+    "Dependabot automerge metadata job must gate to Dependabot",
+  );
+  expectIncludes(
+    errors,
+    automergeJob,
+    "github.event.workflow_run.conclusion == 'success'",
+    "Dependabot automerge must require successful CI completion",
+  );
+
+  verifyExactPermissionBlock(
+    errors,
+    metadataJob,
+    ["pull-requests: read", "statuses: write"],
+    "Dependabot automerge metadata job must declare exact permissions",
+  );
+  verifyExactPermissionBlock(
+    errors,
+    automergeJob,
+    [
+      "contents: write",
+      "pull-requests: write",
+      "checks: read",
+      "statuses: read",
+    ],
+    "Dependabot automerge job must declare exact permissions",
+  );
+
+  if (/-\s*uses:\s*actions\/checkout@/m.test(activeContent)) {
+    errors.push("Dependabot automerge workflow must not check out code");
+  }
+  if (
+    !/-\s*uses:\s*dependabot\/fetch-metadata@v\d+(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?\s*$/m.test(
+      activeContent,
+    )
+  ) {
+    errors.push(
+      "Dependabot automerge workflow must use tracked non-floating metadata action refs",
+    );
+  }
+  verifyTrackedActionRefs(
+    errors,
+    activeContent,
+    automergeTrackedActionNames,
+    "Dependabot automerge workflow must use tracked non-floating metadata action refs",
+  );
+
+  for (const expected of [
+    "package-ecosystem",
+    "directory",
+    "update-type",
+    "jq -cn",
+    "ecosystem:$ecosystem",
+    "directory:$directory",
+    "updateType:$updateType",
+    "dependabot/metadata",
+    "state=success",
+    "github.event.pull_request.head.sha",
+    'test "${#DESCRIPTION}" -le 140',
+  ]) {
+    expectIncludes(
+      errors,
+      metadataJob,
+      expected,
+      "Dependabot automerge metadata job must write compact metadata status",
+    );
+  }
+
+  for (const expected of [
+    ".workflow_run.pull_requests",
+    "-ne 1",
+    "PR_COUNT",
+    "exit 0",
+    '/pulls/"$PR_NUMBER"',
+    'PR_AUTHOR="$(jq -r',
+    'PR_STATE="$(jq -r',
+    'PR_AUTHOR" != "dependabot[bot]"',
+    'PR_STATE" != "open"',
+    'HEAD_SHA="$(jq -r',
+    '/commits/"$HEAD_SHA"/statuses',
+    '/commits/"$HEAD_SHA"/check-runs',
+    'node --input-type=module - "$HEAD_SHA" "$STATUSES" "$CHECKS" "$REQUIRED_CHECKS"',
+    "dependabot/metadata",
+    "security-update:",
+    "version-update:semver-patch",
+    "version-update:semver-minor",
+    "github-actions",
+  ]) {
+    expectIncludes(
+      errors,
+      automergeJob,
+      expected,
+      "Dependabot automerge must re-query current PR head metadata and checks",
+    );
+  }
+  if (automergeJob.includes("/actions/runs/")) {
+    errors.push("Dependabot automerge must use workflow_run payload PRs");
+  }
+
+  for (const check of ciChecks) {
+    expectIncludes(
+      errors,
+      activeContent,
+      check,
+      `Dependabot automerge must consume ${check}`,
+    );
+  }
+
+  if (
+    !/gh pr merge "\$PR_NUMBER" --auto --match-head-commit "\$HEAD_SHA"/.test(
+      automergeJob,
+    )
+  ) {
+    errors.push("Dependabot automerge must protect against stale heads");
+  }
 
   return { errors };
 }
@@ -467,7 +624,12 @@ function ciJobContent(content, job) {
   );
 }
 
-function verifyTrackedActionRefs(errors, content) {
+function verifyTrackedActionRefs(
+  errors,
+  content,
+  actionNames = trackedActionNames,
+  message = "CI workflow must use tracked non-floating GitHub Action refs",
+) {
   const actionRefs = [...content.matchAll(/^\s*-\s*uses:\s*(\S+)\s*$/gm)].map(
     ([, actionRef]) => actionRef,
   );
@@ -477,12 +639,28 @@ function verifyTrackedActionRefs(errors, content) {
     !actionRefs.every((actionRef) => {
       const [actionName] = actionRef.split("@");
       return (
-        trackedActionNames.includes(actionName) &&
+        actionNames.includes(actionName) &&
         /^[^@\s]+@v\d+(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?$/.test(actionRef)
       );
     })
   ) {
-    errors.push("CI workflow must use tracked non-floating GitHub Action refs");
+    errors.push(message);
+  }
+}
+
+function verifyExactPermissionBlock(errors, content, expectedLines, message) {
+  const block =
+    content.match(/^\s*permissions:\s*\n((?:\s{6}\S.*\n?)+)/m)?.[1] ?? "";
+  const permissionLines = block
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (
+    permissionLines.length !== expectedLines.length ||
+    !expectedLines.every((line) => permissionLines.includes(line))
+  ) {
+    errors.push(message);
   }
 }
 
