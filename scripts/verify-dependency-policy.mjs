@@ -23,21 +23,40 @@ const documentedMatrix = [
   "superfly/flyctl-actions/setup-flyctl@v1",
   "dependabot/fetch-metadata@v3",
 ];
-const documentedPhase2Dependencies = [
-  "cors@2.8.5",
-  "dotenv@16.6.1",
-  "express@4.21.2",
-  "express-rate-limit@7.5.1",
+const documentedPackageTargetDependencies = [
+  "cors@2.8.6",
+  "dotenv@17.4.2",
+  "express@5.2.1",
+  "express-rate-limit@8.5.2",
   "moment@2.30.1",
   "@types/cors@2.8.19",
-  "@types/express@4.17.23",
-  "@types/node@20.19.8",
-  "@vitest/coverage-v8@3.2.4",
-  "prettier@3.6.2",
-  "typescript@5.8.3",
-  "vitest@3.2.4",
+  "@types/express@5.0.6",
+  "@types/node@24.13.2",
+  "@vitest/coverage-v8@4.1.8",
+  "prettier@3.8.4",
+  "typescript@6.0.3",
+  "vitest@4.1.8",
   "vitest-mock-express@2.2.0",
 ];
+const phase3TargetDependencies = {
+  dependencies: {
+    cors: "2.8.6",
+    dotenv: "17.4.2",
+    express: "5.2.1",
+    "express-rate-limit": "8.5.2",
+    moment: "2.30.1",
+  },
+  devDependencies: {
+    "@types/cors": "2.8.19",
+    "@types/express": "5.0.6",
+    "@types/node": "24.13.2",
+    "@vitest/coverage-v8": "4.1.8",
+    prettier: "3.8.4",
+    typescript: "6.0.3",
+    vitest: "4.1.8",
+    "vitest-mock-express": "2.2.0",
+  },
+};
 
 export function verifyDependencyPolicy(repository = readRepository()) {
   const errors = [];
@@ -55,13 +74,13 @@ export function verifyDependencyPolicy(repository = readRepository()) {
   }
 
   expectEqual(errors, ".nvmrc", readFile(repository, ".nvmrc").trim(), nodeVersion);
-  verifyPhase2NpmPolicy(errors, readFile(repository, ".npmrc"));
+  errors.push(...verifyFinalNpmPolicy(readFile(repository, ".npmrc")));
   verifyBootstrapPins(errors, readFile(repository, "run.sh"));
   verifyRequiredLines(
     errors,
     "docs/PROJECT.md",
     readFile(repository, "docs/PROJECT.md"),
-    [...documentedMatrix, ...documentedPhase2Dependencies],
+    [...documentedMatrix, ...documentedPackageTargetDependencies],
   );
 
   return { errors };
@@ -69,8 +88,42 @@ export function verifyDependencyPolicy(repository = readRepository()) {
 
 export function verifyFinalNpmPolicy(content) {
   const errors = [];
-  verifyExactLines(errors, ".npmrc", content, [...npmPolicy, "min-release-age=7"]);
+  const expectedValues = [...npmPolicy, "min-release-age=7"];
+  verifyExactLines(errors, ".npmrc", content, expectedValues);
+
+  const assignments = npmPolicyAssignments(content);
+
+  if (
+    assignments.length !== expectedValues.length ||
+    !expectedValues.every((expectedValue) => assignments.includes(expectedValue))
+  ) {
+    errors.push(".npmrc must contain exactly the final npm policy");
+  }
+
   return errors;
+}
+
+function npmPolicyAssignments(content) {
+  return content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.includes("="));
+}
+
+export function verifyPackageTargetMatrix(repository = readRepository()) {
+  const errors = [];
+  const packageJson = readJson(repository, "package.json", errors);
+  const lockfile = readJson(repository, "package-lock.json", errors);
+
+  if (packageJson) {
+    verifyExpectedDependencyMatrix(errors, packageJson);
+  }
+
+  if (packageJson && lockfile) {
+    verifyLockfileRoot(errors, packageJson, lockfile);
+  }
+
+  return { errors };
 }
 
 function readRepository(root = new URL("..", import.meta.url).pathname) {
@@ -128,14 +181,6 @@ function verifyExactLines(errors, label, content, expectedValues) {
   }
 }
 
-function verifyPhase2NpmPolicy(errors, content) {
-  verifyNpmPolicyAssignments(errors, content, npmPolicy);
-
-  if (content.split(/\r?\n/).some((line) => line.trim().startsWith("min-release-age="))) {
-    errors.push(".npmrc must defer min-release-age until Phase 3");
-  }
-}
-
 function verifyBootstrapPins(errors, content) {
   const commands = content
     .split(/\r?\n/)
@@ -149,26 +194,6 @@ function verifyBootstrapPins(errors, content) {
 
   if (!commands.some((line) => line === contextModeBootstrapCommand)) {
     errors.push(`run.sh must install ${contextModePackage}`);
-  }
-}
-
-function verifyNpmPolicyAssignments(errors, content, expectedValues) {
-  const assignments = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.includes("="));
-
-  for (const expectedValue of expectedValues) {
-    const [key, value] = expectedValue.split("=");
-    const actualValues = assignments
-      .filter((line) => line.split("=")[0] === key)
-      .map((line) => line.slice(key.length + 1));
-
-    if (actualValues.length === 0) {
-      errors.push(`.npmrc must document ${expectedValue}`);
-    } else if (actualValues.length !== 1 || actualValues[0] !== value) {
-      errors.push(`.npmrc must set ${key} exactly once to ${value}`);
-    }
   }
 }
 
@@ -187,6 +212,26 @@ function verifyDirectDependencies(errors, packageJson) {
   for (const dependency of removedDependencies) {
     if (packageJson.dependencies?.[dependency] || packageJson.devDependencies?.[dependency]) {
       errors.push(`${dependency} must not be a direct dependency`);
+    }
+  }
+}
+
+function verifyExpectedDependencyMatrix(errors, packageJson) {
+  for (const [section, expectedDependencies] of Object.entries(
+    phase3TargetDependencies,
+  )) {
+    const dependencies = packageJson[section] ?? {};
+
+    if (!equalEntries(expectedDependencies, dependencies)) {
+      errors.push(`package.json ${section} must match Phase 3 target matrix`);
+    }
+
+    for (const [name, version] of Object.entries(expectedDependencies)) {
+      if (dependencies[name] !== version) {
+        errors.push(
+          `${section}.${name} must be ${version} for Phase 3 landing evidence`,
+        );
+      }
     }
   }
 }

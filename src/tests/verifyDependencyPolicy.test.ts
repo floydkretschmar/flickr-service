@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import {
   verifyDependencyPolicy,
   verifyFinalNpmPolicy,
+  verifyPackageTargetMatrix,
 } from "../../scripts/verify-dependency-policy.mjs";
 
 function validRepository() {
@@ -15,44 +16,44 @@ function validRepository() {
     files: {
       ".codex/config.toml":
         'model = "gpt-5"\ncontext_mode_version = "1.0.162"\nrtk_version = "v0.42.4"\n',
-      ".npmrc": "save-exact=true\nengine-strict=true\n",
+      ".npmrc": "save-exact=true\nengine-strict=true\nmin-release-age=7\n",
       ".nvmrc": "24.16.0\n",
       "docs/PROJECT.md":
-        "Node `24.16.0`, npm `11.13.0`, Docker base `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0`, RTK `v0.42.4`, context-mode `1.0.162`, `actions/checkout@v6`, `actions/setup-node@v6`, `superfly/flyctl-actions/setup-flyctl@v1`, `dependabot/fetch-metadata@v3`, `cors@2.8.5`, `dotenv@16.6.1`, `express@4.21.2`, `express-rate-limit@7.5.1`, `moment@2.30.1`, `@types/cors@2.8.19`, `@types/express@4.17.23`, `@types/node@20.19.8`, `@vitest/coverage-v8@3.2.4`, `prettier@3.6.2`, `typescript@5.8.3`, `vitest@3.2.4`, `vitest-mock-express@2.2.0`.",
+        "Node `24.16.0`, npm `11.13.0`, Docker base `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0`, RTK `v0.42.4`, context-mode `1.0.162`, `actions/checkout@v6`, `actions/setup-node@v6`, `superfly/flyctl-actions/setup-flyctl@v1`, `dependabot/fetch-metadata@v3`, `cors@2.8.6`, `dotenv@17.4.2`, `express@5.2.1`, `express-rate-limit@8.5.2`, `moment@2.30.1`, `@types/cors@2.8.19`, `@types/express@5.0.6`, `@types/node@24.13.2`, `@vitest/coverage-v8@4.1.8`, `prettier@3.8.4`, `typescript@6.0.3`, `vitest@4.1.8`, `vitest-mock-express@2.2.0`.",
       "package-lock.json": JSON.stringify({
         lockfileVersion: 3,
         packages: {
           "": {
             dependencies: {
-              cors: "2.8.5",
-              dotenv: "16.6.1",
-              express: "4.21.2",
-              "express-rate-limit": "7.5.1",
+              cors: "2.8.6",
+              dotenv: "17.4.2",
+              express: "5.2.1",
+              "express-rate-limit": "8.5.2",
               moment: "2.30.1",
             },
             devDependencies: {
               "@types/cors": "2.8.19",
-              "@types/express": "4.17.23",
-              "@types/node": "20.19.8",
-              "@vitest/coverage-v8": "3.2.4",
-              prettier: "3.6.2",
-              typescript: "5.8.3",
-              vitest: "3.2.4",
+              "@types/express": "5.0.6",
+              "@types/node": "24.13.2",
+              "@vitest/coverage-v8": "4.1.8",
+              prettier: "3.8.4",
+              typescript: "6.0.3",
+              vitest: "4.1.8",
               "vitest-mock-express": "2.2.0",
             },
           },
           "node_modules/@types/cors": { version: "2.8.19" },
-          "node_modules/@types/express": { version: "4.17.23" },
-          "node_modules/@types/node": { version: "20.19.8" },
-          "node_modules/@vitest/coverage-v8": { version: "3.2.4" },
-          "node_modules/cors": { version: "2.8.5" },
-          "node_modules/dotenv": { version: "16.6.1" },
-          "node_modules/express": { version: "4.21.2" },
-          "node_modules/express-rate-limit": { version: "7.5.1" },
+          "node_modules/@types/express": { version: "5.0.6" },
+          "node_modules/@types/node": { version: "24.13.2" },
+          "node_modules/@vitest/coverage-v8": { version: "4.1.8" },
+          "node_modules/cors": { version: "2.8.6" },
+          "node_modules/dotenv": { version: "17.4.2" },
+          "node_modules/express": { version: "5.2.1" },
+          "node_modules/express-rate-limit": { version: "8.5.2" },
           "node_modules/moment": { version: "2.30.1" },
-          "node_modules/prettier": { version: "3.6.2" },
-          "node_modules/typescript": { version: "5.8.3" },
-          "node_modules/vitest": { version: "3.2.4" },
+          "node_modules/prettier": { version: "3.8.4" },
+          "node_modules/typescript": { version: "6.0.3" },
+          "node_modules/vitest": { version: "4.1.8" },
           "node_modules/vitest-mock-express": { version: "2.2.0" },
         },
       }),
@@ -60,20 +61,20 @@ function validRepository() {
         engines: { node: "24.16.0" },
         packageManager: "npm@11.13.0",
         dependencies: {
-          cors: "2.8.5",
-          dotenv: "16.6.1",
-          express: "4.21.2",
-          "express-rate-limit": "7.5.1",
+          cors: "2.8.6",
+          dotenv: "17.4.2",
+          express: "5.2.1",
+          "express-rate-limit": "8.5.2",
           moment: "2.30.1",
         },
         devDependencies: {
           "@types/cors": "2.8.19",
-          "@types/express": "4.17.23",
-          "@types/node": "20.19.8",
-          "@vitest/coverage-v8": "3.2.4",
-          prettier: "3.6.2",
-          typescript: "5.8.3",
-          vitest: "3.2.4",
+          "@types/express": "5.0.6",
+          "@types/node": "24.13.2",
+          "@vitest/coverage-v8": "4.1.8",
+          prettier: "3.8.4",
+          typescript: "6.0.3",
+          vitest: "4.1.8",
           "vitest-mock-express": "2.2.0",
         },
       }),
@@ -104,7 +105,7 @@ async function writeRepositoryFixture(
 }
 
 describe("dependency policy verifier", () => {
-  it("accepts a repository that satisfies the Phase 2 runtime and dependency contract", () => {
+  it("accepts a repository that satisfies the Phase 3 runtime and dependency contract", () => {
     const result = verifyDependencyPolicy(validRepository());
 
     expect(result.errors).toEqual([]);
@@ -116,7 +117,7 @@ describe("dependency policy verifier", () => {
       "Node `24.16.0`, npm `11.13.0`, Docker base `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0`, RTK `v0.42.4`, context-mode `1.0.162`, `actions/checkout@v6`, `actions/setup-node@v6`, `superfly/flyctl-actions/setup-flyctl@v1`, `dependabot/fetch-metadata@v3`, `cors`, `dotenv`, `express`, `express-rate-limit`, `moment`, `@types/cors`, `@types/express`, `@types/node`, `@vitest/coverage-v8`, `prettier`, `typescript`, `vitest`, `vitest-mock-express`.";
 
     expect(verifyDependencyPolicy(repository).errors).toContain(
-      "docs/PROJECT.md must document cors@2.8.5",
+      "docs/PROJECT.md must document cors@2.8.6",
     );
   });
 
@@ -124,21 +125,21 @@ describe("dependency policy verifier", () => {
     const repository = validRepository();
     repository.files["docs/PROJECT.md"] = repository.files[
       "docs/PROJECT.md"
-    ].replace("`cors@2.8.5`", "`cors@2.8.50`");
+    ].replace("`cors@2.8.6`", "`cors@2.8.60`");
 
     expect(verifyDependencyPolicy(repository).errors).toContain(
-      "docs/PROJECT.md must document cors@2.8.5",
+      "docs/PROJECT.md must document cors@2.8.6",
     );
   });
 
-  it("accepts a future exact dependency update without changing Phase 2 landing docs", () => {
+  it("accepts a future exact dependency update without changing package target landing docs", () => {
     const repository = validRepository();
     mutateJson(repository, "package.json", (packageJson) => {
-      packageJson.dependencies.cors = "2.8.6";
+      packageJson.dependencies.cors = "2.8.7";
     });
     mutateJson(repository, "package-lock.json", (lockfile) => {
-      lockfile.packages[""].dependencies.cors = "2.8.6";
-      lockfile.packages["node_modules/cors"].version = "2.8.6";
+      lockfile.packages[""].dependencies.cors = "2.8.7";
+      lockfile.packages["node_modules/cors"].version = "2.8.7";
     });
 
     expect(verifyDependencyPolicy(repository).errors).toEqual([]);
@@ -149,19 +150,19 @@ describe("dependency policy verifier", () => {
     mutateJson(repository, "package-lock.json", (lockfile) => {
       lockfile.packages[""].dependencies = {
         moment: "2.30.1",
-        "express-rate-limit": "7.5.1",
-        express: "4.21.2",
-        dotenv: "16.6.1",
-        cors: "2.8.5",
+        "express-rate-limit": "8.5.2",
+        express: "5.2.1",
+        dotenv: "17.4.2",
+        cors: "2.8.6",
       };
       lockfile.packages[""].devDependencies = {
         "vitest-mock-express": "2.2.0",
-        vitest: "3.2.4",
-        typescript: "5.8.3",
-        prettier: "3.6.2",
-        "@vitest/coverage-v8": "3.2.4",
-        "@types/node": "20.19.8",
-        "@types/express": "4.17.23",
+        vitest: "4.1.8",
+        typescript: "6.0.3",
+        prettier: "3.8.4",
+        "@vitest/coverage-v8": "4.1.8",
+        "@types/node": "24.13.2",
+        "@types/express": "5.0.6",
         "@types/cors": "2.8.19",
       };
     });
@@ -316,17 +317,17 @@ describe("dependency policy verifier", () => {
     expect(verifyDependencyPolicy(repository).errors).toContain(expectedError);
   });
 
-  it("rejects contradictory Phase 2 npm policy assignments", () => {
+  it("rejects contradictory final npm policy assignments", () => {
     const repository = validRepository();
     repository.files[".npmrc"] =
       "save-exact=true\nengine-strict=true\nsave-exact=false\n";
 
     expect(verifyDependencyPolicy(repository).errors).toContain(
-      ".npmrc must set save-exact exactly once to true",
+      ".npmrc must contain exactly the final npm policy",
     );
   });
 
-  it("covers the deferred final npm release-age policy without requiring it in Phase 2", () => {
+  it("covers the final npm release-age policy", () => {
     expect(
       verifyFinalNpmPolicy(
         "save-exact=true\nengine-strict=true\nmin-release-age=7\n",
@@ -337,5 +338,72 @@ describe("dependency policy verifier", () => {
         "save-exact=true\nengine-strict=true\nmin-release-age=7d\n",
       ),
     ).toContain(".npmrc must document min-release-age=7");
+    expect(
+      verifyFinalNpmPolicy(
+        "save-exact=true\nengine-strict=true\nmin-release-age=7\nlegacy-peer-deps=true\n",
+      ),
+    ).toContain(".npmrc must contain exactly the final npm policy");
+  });
+
+  it("proves the Phase 3 package target matrix without freezing ongoing policy", () => {
+    const repository = validRepository();
+    mutateJson(repository, "package.json", (packageJson) => {
+      packageJson.dependencies = {
+        cors: "2.8.6",
+        dotenv: "17.4.2",
+        express: "5.2.1",
+        "express-rate-limit": "8.5.2",
+        moment: "2.30.1",
+      };
+      packageJson.devDependencies = {
+        "@types/cors": "2.8.19",
+        "@types/express": "5.0.6",
+        "@types/node": "24.13.2",
+        "@vitest/coverage-v8": "4.1.8",
+        prettier: "3.8.4",
+        typescript: "6.0.3",
+        vitest: "4.1.8",
+        "vitest-mock-express": "2.2.0",
+      };
+    });
+    mutateJson(repository, "package-lock.json", (lockfile) => {
+      lockfile.packages[""].dependencies = {
+        cors: "2.8.6",
+        dotenv: "17.4.2",
+        express: "5.2.1",
+        "express-rate-limit": "8.5.2",
+        moment: "2.30.1",
+      };
+      lockfile.packages[""].devDependencies = {
+        "@types/cors": "2.8.19",
+        "@types/express": "5.0.6",
+        "@types/node": "24.13.2",
+        "@vitest/coverage-v8": "4.1.8",
+        prettier: "3.8.4",
+        typescript: "6.0.3",
+        vitest: "4.1.8",
+        "vitest-mock-express": "2.2.0",
+      };
+
+      for (const [name, version] of Object.entries({
+        ...lockfile.packages[""].dependencies,
+        ...lockfile.packages[""].devDependencies,
+      })) {
+        lockfile.packages[`node_modules/${name}`] = { version };
+      }
+    });
+
+    expect(verifyPackageTargetMatrix(repository).errors).toEqual([]);
+
+    mutateJson(repository, "package.json", (packageJson) => {
+      packageJson.dependencies.cors = "2.8.7";
+    });
+
+    expect(verifyPackageTargetMatrix(repository).errors).toContain(
+      "dependencies.cors must be 2.8.6 for Phase 3 landing evidence",
+    );
+    expect(verifyDependencyPolicy(repository).errors).not.toContain(
+      "dependencies.cors must be 2.8.6 for Phase 3 landing evidence",
+    );
   });
 });

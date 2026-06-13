@@ -9,7 +9,7 @@
 | **src/flickrService.ts**           | Flickr REST client for `flickr.photosets.getPhotos`, including API key, photoset id, requested extras, page number, and per-page count.                                                               |
 | **environment.d.ts**               | Process environment contract for port, rate limit, Flickr API settings, CORS origins, and the full-resolution image bucket base URL.                                                                  |
 | **src/tests**                      | Vitest unit tests for controller status behavior, Flickr URL construction, photo DTO mapping, CORS configuration, rate-limit registration, and server startup.                                        |
-| **Dockerfile**                     | Multi-stage Node 22 Alpine image that installs dependencies, builds TypeScript, prunes development packages, exposes port `3000`, and runs `npm run start`.                                           |
+| **Dockerfile**                     | Multi-stage Node image that installs dependencies, builds TypeScript, prunes development packages, exposes port `3000`, and runs `npm run start`.                                                     |
 | **fly.toml**                       | Fly.io deployment config for the `flickr-service` app in `fra`, including HTTPS service settings, autoscaling-to-zero behavior, and non-secret runtime defaults.                                      |
 | **.github/workflows/pipeline.yml** | Main-branch CI/CD workflow that installs dependencies, builds TypeScript, runs coverage, and deploys to Fly.io with `flyctl`.                                                                         |
 | **run.sh**                         | Repository command wrapper for Codex hooks and environment setup; `test` runs coverage, `format` runs the maintained-file Prettier check, and `build` runs the TypeScript build.                      |
@@ -17,7 +17,7 @@
 
 ## Runtime And Dependency Policy
 
-Phase 2 landing evidence records the reviewed runtime and maintenance matrix without freezing future Dependabot version movement in the ongoing verifier.
+Phase 3 landing evidence records the reviewed runtime, package, and maintenance matrix without freezing future Dependabot version movement in the ongoing verifier.
 
 | Item                     | Target                                                                                        |
 | ------------------------ | --------------------------------------------------------------------------------------------- |
@@ -34,7 +34,7 @@ Phase 2 landing evidence records the reviewed runtime and maintenance matrix wit
 | Fly setup action         | `superfly/flyctl-actions/setup-flyctl@v1`                                                     |
 | Dependabot metadata      | `dependabot/fetch-metadata@v3`                                                                |
 
-Current Phase 2 direct production dependencies are exact pins for `cors@2.8.5`, `dotenv@16.6.1`, `express@4.21.2`, `express-rate-limit@7.5.1`, and `moment@2.30.1`. Current Phase 2 direct development dependencies are exact pins for `@types/cors@2.8.19`, `@types/express@4.17.23`, `@types/node@20.19.8`, `@vitest/coverage-v8@3.2.4`, `prettier@3.6.2`, `typescript@5.8.3`, `vitest@3.2.4`, and `vitest-mock-express@2.2.0`.
+Current Phase 3 direct production dependencies are exact pins for `cors@2.8.6`, `dotenv@17.4.2`, `express@5.2.1`, `express-rate-limit@8.5.2`, and `moment@2.30.1`. Current Phase 3 direct development dependencies are exact pins for `@types/cors@2.8.19`, `@types/express@5.0.6`, `@types/node@24.13.2`, `@vitest/coverage-v8@4.1.8`, `prettier@3.8.4`, `typescript@6.0.3`, `vitest@4.1.8`, and `vitest-mock-express@2.2.0`.
 
 ## Architectural conventions
 

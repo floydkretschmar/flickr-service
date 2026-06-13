@@ -16,7 +16,7 @@ describe("Pictures controller", () => {
   const photoService: Partial<PhotoService> = { getPhotos: getPhotos };
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
   it("should return pictures response for valid request", async () => {
     const request: Request<
