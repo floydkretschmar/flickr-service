@@ -10,12 +10,12 @@ const removedDependencies = ["express-validator", "@flydotio/dockerfile"];
 const npmPolicy = ["save-exact=true", "engine-strict=true"];
 const rtkVersion = "v0.42.4";
 const contextModePackage = "context-mode@1.0.162";
-const rtkBootstrapCommand = /^curl\s+-fsSL\s+https:\/\/raw\.githubusercontent\.com\/rtk-ai\/rtk\/v0\.42\.4\/install\.sh\s+\|\s+sh$/;
+const rtkBootstrapCommand =
+  /^curl\s+-fsSL\s+https:\/\/raw\.githubusercontent\.com\/rtk-ai\/rtk\/v0\.42\.4\/install\.sh\s+\|\s+sh$/;
 const contextModeBootstrapCommand = `npm install -g ${contextModePackage}`;
 const documentedMatrix = [
   nodeVersion,
   npmVersion,
-  "node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0",
   "v0.42.4",
   "1.0.162",
   "actions/checkout@v6",
@@ -96,8 +96,18 @@ export function verifyDependencyPolicy(repository = readRepository()) {
   const lockfile = readJson(repository, "package-lock.json", errors);
 
   if (packageJson) {
-    expectEqual(errors, "package.json engines.node", packageJson.engines?.node, nodeVersion);
-    expectEqual(errors, "package.json packageManager", packageJson.packageManager, packageManager);
+    expectEqual(
+      errors,
+      "package.json engines.node",
+      packageJson.engines?.node,
+      nodeVersion,
+    );
+    expectEqual(
+      errors,
+      "package.json packageManager",
+      packageJson.packageManager,
+      packageManager,
+    );
     verifyDirectDependencies(errors, packageJson);
   }
 
@@ -105,10 +115,19 @@ export function verifyDependencyPolicy(repository = readRepository()) {
     verifyLockfileRoot(errors, packageJson, lockfile);
   }
 
-  expectEqual(errors, ".nvmrc", readFile(repository, ".nvmrc").trim(), nodeVersion);
+  expectEqual(
+    errors,
+    ".nvmrc",
+    readFile(repository, ".nvmrc").trim(),
+    nodeVersion,
+  );
   errors.push(...verifyFinalNpmPolicy(readFile(repository, ".npmrc")));
   verifyBootstrapPins(errors, readFile(repository, "run.sh"));
-  errors.push(...verifyCiWorkflow(readFile(repository, ".github/workflows/pipeline.yml")).errors);
+  errors.push(
+    ...verifyCiWorkflow(readFile(repository, ".github/workflows/pipeline.yml"))
+      .errors,
+  );
+  errors.push(...verifyDockerfile(readFile(repository, "Dockerfile")).errors);
   verifyRequiredLines(
     errors,
     "docs/PROJECT.md",
@@ -127,18 +146,28 @@ export function verifyCiWorkflow(content) {
     errors.push("CI workflow must run on pull_request");
   }
 
-  if (!/^\s*push:\s*$/m.test(activeContent) || !/^\s*-\s*main\s*$/m.test(activeContent)) {
+  if (
+    !/^\s*push:\s*$/m.test(activeContent) ||
+    !/^\s*-\s*main\s*$/m.test(activeContent)
+  ) {
     errors.push("CI workflow must run on main pushes");
   }
 
   for (const check of ciChecks) {
-    if (!new RegExp(`^\\s*name:\\s*${escapeRegExp(check)}\\s*$`, "m").test(activeContent)) {
+    if (
+      !new RegExp(`^\\s*name:\\s*${escapeRegExp(check)}\\s*$`, "m").test(
+        activeContent,
+      )
+    ) {
       errors.push(`CI workflow must expose ${check} as a job`);
     }
   }
 
   const jobs = Object.fromEntries(
-    ["install", ...ciDeployNeeds].map((job) => [job, ciJobContent(activeContent, job)]),
+    ["install", ...ciDeployNeeds].map((job) => [
+      job,
+      ciJobContent(activeContent, job),
+    ]),
   );
 
   const auditSignaturesJob = jobs["audit-signatures"];
@@ -158,20 +187,144 @@ export function verifyCiWorkflow(content) {
   }
 
   for (const [job, command] of ciGateCommandsByJob) {
-    expectIncludes(errors, jobs[job], command, `CI workflow must run ${command}`);
+    expectIncludes(
+      errors,
+      jobs[job],
+      command,
+      `CI workflow must run ${command}`,
+    );
   }
 
   verifyTrackedActionRefs(errors, activeContent);
 
-  if (!/if:\s*github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/.test(activeContent)) {
+  if (
+    !/if:\s*github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/.test(
+      activeContent,
+    )
+  ) {
     errors.push("CI deploy must run only for main pushes");
   }
 
   for (const job of ciDeployNeeds) {
-    expectIncludes(errors, activeContent, `- ${job}`, `CI deploy must need ${job}`);
+    expectIncludes(
+      errors,
+      activeContent,
+      `- ${job}`,
+      `CI deploy must need ${job}`,
+    );
   }
 
   return { errors };
+}
+
+export function verifyDockerfile(content) {
+  const errors = [];
+  const activeContent = uncommentedContent(content);
+  const stages = dockerStages(activeContent);
+  const finalStageContent = finalDockerStageContent(activeContent, stages);
+
+  const baseStage = stages.find(({ image }) => isNode24PinnedBase(image));
+  if (!baseStage) {
+    errors.push(
+      "Dockerfile base image must be Node 24 Alpine pinned by digest",
+    );
+  }
+  if (!finalDockerStageUsesBase(stages, baseStage)) {
+    errors.push(
+      "Dockerfile final runtime stage must inherit the Node 24 digest-pinned base",
+    );
+  }
+  if (!dockerStageUsesBase(stages, "build")) {
+    errors.push(
+      "Dockerfile build stage must inherit the Node 24 digest-pinned base",
+    );
+  }
+  expectInstruction(
+    errors,
+    finalStageContent,
+    "COPY",
+    "--from=build /app /app",
+    "Dockerfile final runtime stage must copy from the verified build stage",
+  );
+
+  expectInstruction(
+    errors,
+    activeContent,
+    "RUN",
+    "npm ci",
+    "Dockerfile install must use npm ci",
+  );
+  expectInstruction(
+    errors,
+    activeContent,
+    "RUN",
+    "npm run build",
+    "Dockerfile must build TypeScript",
+  );
+  expectInstruction(
+    errors,
+    activeContent,
+    "RUN",
+    "npm prune --omit=dev",
+    "Dockerfile must prune development dependencies",
+  );
+  expectInstruction(
+    errors,
+    activeContent,
+    "EXPOSE",
+    "3000",
+    "Dockerfile must expose port 3000",
+  );
+
+  if (
+    !/CMD\s+\[\s*"node"\s*,\s*"build\/index\.js"\s*\]/.test(finalStageContent)
+  ) {
+    errors.push("Dockerfile must start node build/index.js");
+  }
+
+  return { errors };
+}
+
+function dockerStages(content) {
+  return [...content.matchAll(/^FROM\s+(\S+)(?:\s+as\s+(\S+))?\s*$/gim)].map(
+    ({ 0: instruction, 1: image, 2: alias, index }) => ({
+      image,
+      alias,
+      index,
+      endIndex: index + instruction.length,
+    }),
+  );
+}
+
+function finalDockerStageUsesBase(stages, baseStage) {
+  const finalStage = stages.at(-1);
+  return (
+    !!finalStage && baseStage?.alias === "base" && finalStage.image === "base"
+  );
+}
+
+function dockerStageUsesBase(stages, alias) {
+  return stages.some((stage) => stage.alias === alias && stage.image === "base");
+}
+
+function finalDockerStageContent(content, stages) {
+  const finalStage = stages.at(-1);
+  return finalStage ? content.slice(finalStage.endIndex) : "";
+}
+
+function isNode24PinnedBase(image) {
+  return /^node:24\.\d+\.\d+-alpine@sha256:[0-9a-f]{64}$/i.test(image);
+}
+
+function expectInstruction(errors, content, instruction, value, message) {
+  if (
+    !new RegExp(
+      `^\\s*${instruction}\\s+${escapeRegExp(value)}(?:\\s|$)`,
+      "im",
+    ).test(content)
+  ) {
+    errors.push(message);
+  }
 }
 
 function uncommentedContent(content) {
@@ -188,7 +341,11 @@ function expectIncludes(errors, content, expected, message) {
 }
 
 function ciJobContent(content, job) {
-  return content.match(new RegExp(`\\n  ${escapeRegExp(job)}:[\\s\\S]*?(?=\\n\\n  \\S|$)`))?.[0] ?? "";
+  return (
+    content.match(
+      new RegExp(`\\n  ${escapeRegExp(job)}:[\\s\\S]*?(?=\\n\\n  \\S|$)`),
+    )?.[0] ?? ""
+  );
 }
 
 function verifyTrackedActionRefs(errors, content) {
@@ -219,7 +376,9 @@ export function verifyFinalNpmPolicy(content) {
 
   if (
     assignments.length !== expectedValues.length ||
-    !expectedValues.every((expectedValue) => assignments.includes(expectedValue))
+    !expectedValues.every((expectedValue) =>
+      assignments.includes(expectedValue),
+    )
   ) {
     errors.push(".npmrc must contain exactly the final npm policy");
   }
@@ -290,9 +449,7 @@ function verifyRequiredLines(errors, label, content, expectedValues) {
 
 function hasBoundedToken(content, expectedValue) {
   const escapedValue = escapeRegExp(expectedValue);
-  return new RegExp(`(^|[^\\w@])${escapedValue}(?=$|[^\\w@.:-])`).test(
-    content,
-  );
+  return new RegExp(`(^|[^\\w@])${escapedValue}(?=$|[^\\w@.:-])`).test(content);
 }
 
 function escapeRegExp(value) {
@@ -314,9 +471,7 @@ function verifyBootstrapPins(errors, content) {
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+#.*$/, "").trim());
 
-  if (
-    !commands.some((line) => rtkBootstrapCommand.test(line))
-  ) {
+  if (!commands.some((line) => rtkBootstrapCommand.test(line))) {
     errors.push(`run.sh must install RTK from ${rtkVersion}`);
   }
 
@@ -338,7 +493,10 @@ function verifyDirectDependencies(errors, packageJson) {
   }
 
   for (const dependency of removedDependencies) {
-    if (packageJson.dependencies?.[dependency] || packageJson.devDependencies?.[dependency]) {
+    if (
+      packageJson.dependencies?.[dependency] ||
+      packageJson.devDependencies?.[dependency]
+    ) {
       errors.push(`${dependency} must not be a direct dependency`);
     }
   }

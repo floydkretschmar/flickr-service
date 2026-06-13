@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import {
   verifyCiWorkflow,
   verifyDependencyPolicy,
+  verifyDockerfile,
   verifyFinalNpmPolicy,
   verifyPackageTargetMatrix,
 } from "../../scripts/verify-dependency-policy.mjs";
@@ -21,6 +22,7 @@ function validRepository() {
       ".nvmrc": "24.16.0\n",
       "docs/PROJECT.md":
         "Node `24.16.0`, npm `11.13.0`, Docker base `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0`, RTK `v0.42.4`, context-mode `1.0.162`, `actions/checkout@v6`, `actions/setup-node@v6`, `superfly/flyctl-actions/setup-flyctl@v1`, `dependabot/fetch-metadata@v3`, `cors@2.8.6`, `dotenv@17.4.2`, `express@5.2.1`, `express-rate-limit@8.5.2`, `moment@2.30.1`, `@types/cors@2.8.19`, `@types/express@5.0.6`, `@types/node@24.13.2`, `@vitest/coverage-v8@4.1.8`, `prettier@3.8.4`, `typescript@6.0.3`, `vitest@4.1.8`, `vitest-mock-express@2.2.0`.",
+      Dockerfile: validDockerfile(),
       ".github/workflows/pipeline.yml": validCiWorkflow(),
       "package-lock.json": JSON.stringify({
         lockfileVersion: 3,
@@ -84,6 +86,28 @@ function validRepository() {
         "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/v0.42.4/install.sh | sh\nnpm install -g context-mode@1.0.162\n",
     },
   };
+}
+
+function validDockerfile() {
+  return `# syntax = docker/dockerfile:1
+
+FROM node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 as base
+
+WORKDIR /app
+ENV NODE_ENV="production"
+
+FROM base as build
+COPY --link package-lock.json package.json ./
+RUN npm ci --include=dev
+COPY --link . .
+RUN npm run build
+RUN npm prune --omit=dev
+
+FROM base
+COPY --from=build /app /app
+EXPOSE 3000
+CMD [ "node", "build/index.js" ]
+`;
 }
 
 function validCiWorkflow() {
@@ -414,7 +438,7 @@ describe("dependency policy verifier", () => {
       "landing documentation",
       "docs/PROJECT.md",
       "Node `24.16.0` and npm `11.13.0`.",
-      "docs/PROJECT.md must document node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0",
+      "docs/PROJECT.md must document actions/checkout@v6",
     ],
   ])("rejects invalid %s metadata", (_, path, content, expectedError) => {
     const repository = validRepository();
@@ -533,6 +557,130 @@ describe("dependency policy verifier", () => {
         "CI workflow must use tracked non-floating GitHub Action refs",
       ]),
     );
+  });
+
+  it("validates the Dockerfile runtime contract without freezing future digest refreshes", () => {
+    expect(verifyDockerfile(validDockerfile()).errors).toEqual([]);
+    expect(
+      verifyDockerfile(
+        validDockerfile().replace(
+          "node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0",
+          "node:24.17.0-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ),
+      ).errors,
+    ).toEqual([]);
+
+    const invalidDockerfile = validDockerfile()
+      .replace(
+        "node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 as base",
+        "node:22.17.0-alpine as base",
+      )
+      .replace("RUN npm ci --include=dev", "RUN npm install")
+      .replace("RUN npm run build\n", "")
+      .replace("RUN npm prune --omit=dev\n", "")
+      .replace("EXPOSE 3000", "EXPOSE 8080")
+      .replace('CMD [ "node", "build/index.js" ]', 'CMD [ "npm", "start" ]');
+
+    expect(verifyDockerfile(invalidDockerfile).errors).toEqual(
+      expect.arrayContaining([
+        "Dockerfile base image must be Node 24 Alpine pinned by digest",
+        "Dockerfile install must use npm ci",
+        "Dockerfile must build TypeScript",
+        "Dockerfile must prune development dependencies",
+        "Dockerfile must expose port 3000",
+        "Dockerfile must start node build/index.js",
+      ]),
+    );
+    expect(verifyDependencyPolicy().errors).not.toContain(
+      "Dockerfile base image must be Node 24 Alpine pinned by digest",
+    );
+  });
+
+  it("requires the final Docker runtime stage to inherit the Node 24 digest-pinned base", () => {
+    for (const wrongFinalRuntime of [
+      "node:22.17.0-alpine@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0",
+    ]) {
+      expect(
+        verifyDockerfile(
+          validDockerfile().replace(
+            "FROM base\nCOPY --from=build /app /app",
+            `FROM ${wrongFinalRuntime}\nCOPY --from=build /app /app`,
+          ),
+        ).errors,
+      ).toEqual([
+        "Dockerfile final runtime stage must inherit the Node 24 digest-pinned base",
+      ]);
+    }
+
+    expect(
+      verifyDockerfile(
+        validDockerfile()
+          .replace(" as base", " as runtime")
+          .replaceAll("FROM base", "FROM runtime"),
+      ).errors,
+    ).toEqual([
+      "Dockerfile final runtime stage must inherit the Node 24 digest-pinned base",
+      "Dockerfile build stage must inherit the Node 24 digest-pinned base",
+    ]);
+  });
+
+  it("requires the Docker build stage to inherit the verified base", () => {
+    expect(
+      verifyDockerfile(
+        validDockerfile().replace(
+          "FROM base as build",
+          "FROM node:22.17.0-alpine as build",
+        ),
+      ).errors,
+    ).toEqual([
+      "Dockerfile build stage must inherit the Node 24 digest-pinned base",
+    ]);
+  });
+
+  it("requires the final Docker runtime stage to copy from the verified build stage", () => {
+    expect(
+      verifyDockerfile(
+        validDockerfile().replace(
+          "COPY --from=build /app /app",
+          "COPY --from=base /app /app",
+        ),
+      ).errors,
+    ).toEqual([
+      "Dockerfile final runtime stage must copy from the verified build stage",
+    ]);
+  });
+
+  it("requires the final Docker runtime stage to start the compiled API", () => {
+    expect(
+      verifyDockerfile(
+        validDockerfile()
+          .replace(
+            'CMD [ "node", "build/index.js" ]\n',
+            'CMD [ "npm", "start" ]\n',
+          )
+          .replace(
+            "RUN npm prune --omit=dev",
+            'RUN npm prune --omit=dev\nCMD [ "node", "build/index.js" ]',
+          ),
+      ).errors,
+    ).toEqual(["Dockerfile must start node build/index.js"]);
+  });
+
+  it("accepts a future Docker base refresh without changing landing proof policy", () => {
+    const repository = validRepository();
+    repository.files.Dockerfile = validDockerfile().replace(
+      "node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0",
+      "node:24.17.0-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
+    repository.files["docs/PROJECT.md"] = repository.files[
+      "docs/PROJECT.md"
+    ].replace(
+      "node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0",
+      "node:24.17.0-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
+
+    expect(verifyDependencyPolicy(repository).errors).toEqual([]);
   });
 
   it("accepts future tracked GitHub Action refs without changing landing proof docs", () => {
