@@ -57,6 +57,38 @@ const phase3TargetDependencies = {
     "vitest-mock-express": "2.2.0",
   },
 };
+const ciChecks = [
+  "ci/install",
+  "ci/audit-signatures",
+  "ci/audit-vulnerabilities",
+  "ci/format",
+  "ci/build",
+  "ci/test-coverage",
+];
+const ciDeployNeeds = [
+  "audit-signatures",
+  "audit-vulnerabilities",
+  "format",
+  "build",
+  "test-coverage",
+];
+const ciGateCommandsByJob = [
+  ["audit-signatures", "npm audit signatures --min-release-age=0"],
+  ["audit-vulnerabilities", "npm audit --audit-level=high"],
+  ["format", "./run.sh format"],
+  ["build", "./run.sh build"],
+  ["test-coverage", "./run.sh test"],
+];
+const ciBaselineRequirements = [
+  ["node-version-file: .nvmrc", "CI workflow must set up Node from .nvmrc"],
+  ["npm install -g npm@11.13.0", "CI workflow must ensure npm 11.13.0"],
+  ["npm ci", "CI workflow must run npm ci in every baseline job"],
+];
+const trackedActionNames = [
+  "actions/checkout",
+  "actions/setup-node",
+  "superfly/flyctl-actions/setup-flyctl",
+];
 
 export function verifyDependencyPolicy(repository = readRepository()) {
   const errors = [];
@@ -76,6 +108,7 @@ export function verifyDependencyPolicy(repository = readRepository()) {
   expectEqual(errors, ".nvmrc", readFile(repository, ".nvmrc").trim(), nodeVersion);
   errors.push(...verifyFinalNpmPolicy(readFile(repository, ".npmrc")));
   verifyBootstrapPins(errors, readFile(repository, "run.sh"));
+  errors.push(...verifyCiWorkflow(readFile(repository, ".github/workflows/pipeline.yml")).errors);
   verifyRequiredLines(
     errors,
     "docs/PROJECT.md",
@@ -84,6 +117,97 @@ export function verifyDependencyPolicy(repository = readRepository()) {
   );
 
   return { errors };
+}
+
+export function verifyCiWorkflow(content) {
+  const errors = [];
+  const activeContent = uncommentedContent(content);
+
+  if (!/^\s*pull_request:\s*$/m.test(activeContent)) {
+    errors.push("CI workflow must run on pull_request");
+  }
+
+  if (!/^\s*push:\s*$/m.test(activeContent) || !/^\s*-\s*main\s*$/m.test(activeContent)) {
+    errors.push("CI workflow must run on main pushes");
+  }
+
+  for (const check of ciChecks) {
+    if (!new RegExp(`^\\s*name:\\s*${escapeRegExp(check)}\\s*$`, "m").test(activeContent)) {
+      errors.push(`CI workflow must expose ${check} as a job`);
+    }
+  }
+
+  const jobs = Object.fromEntries(
+    ["install", ...ciDeployNeeds].map((job) => [job, ciJobContent(activeContent, job)]),
+  );
+
+  const auditSignaturesJob = jobs["audit-signatures"];
+  if (
+    auditSignaturesJob.includes("npm audit signatures --min-release-age=0") &&
+    (auditSignaturesJob.indexOf("npm ci") === -1 ||
+      auditSignaturesJob.indexOf("npm ci") >
+        auditSignaturesJob.indexOf("npm audit signatures --min-release-age=0"))
+  ) {
+    errors.push("CI workflow must run npm ci before audit signatures");
+  }
+
+  for (const [requirement, message] of ciBaselineRequirements) {
+    if (Object.values(jobs).some((job) => !job.includes(requirement))) {
+      errors.push(message);
+    }
+  }
+
+  for (const [job, command] of ciGateCommandsByJob) {
+    expectIncludes(errors, jobs[job], command, `CI workflow must run ${command}`);
+  }
+
+  verifyTrackedActionRefs(errors, activeContent);
+
+  if (!/if:\s*github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/.test(activeContent)) {
+    errors.push("CI deploy must run only for main pushes");
+  }
+
+  for (const job of ciDeployNeeds) {
+    expectIncludes(errors, activeContent, `- ${job}`, `CI deploy must need ${job}`);
+  }
+
+  return { errors };
+}
+
+function uncommentedContent(content) {
+  return content
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith("#"))
+    .join("\n");
+}
+
+function expectIncludes(errors, content, expected, message) {
+  if (!content.includes(expected)) {
+    errors.push(message);
+  }
+}
+
+function ciJobContent(content, job) {
+  return content.match(new RegExp(`\\n  ${escapeRegExp(job)}:[\\s\\S]*?(?=\\n\\n  \\S|$)`))?.[0] ?? "";
+}
+
+function verifyTrackedActionRefs(errors, content) {
+  const actionRefs = [...content.matchAll(/^\s*-\s*uses:\s*(\S+)\s*$/gm)].map(
+    ([, actionRef]) => actionRef,
+  );
+
+  if (
+    actionRefs.length === 0 ||
+    !actionRefs.every((actionRef) => {
+      const [actionName] = actionRef.split("@");
+      return (
+        trackedActionNames.includes(actionName) &&
+        /^[^@\s]+@v\d+(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?$/.test(actionRef)
+      );
+    })
+  ) {
+    errors.push("CI workflow must use tracked non-floating GitHub Action refs");
+  }
 }
 
 export function verifyFinalNpmPolicy(content) {
@@ -165,10 +289,14 @@ function verifyRequiredLines(errors, label, content, expectedValues) {
 }
 
 function hasBoundedToken(content, expectedValue) {
-  const escapedValue = expectedValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedValue = escapeRegExp(expectedValue);
   return new RegExp(`(^|[^\\w@])${escapedValue}(?=$|[^\\w@.:-])`).test(
     content,
   );
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function verifyExactLines(errors, label, content, expectedValues) {

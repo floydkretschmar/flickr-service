@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
+  verifyCiWorkflow,
   verifyDependencyPolicy,
   verifyFinalNpmPolicy,
   verifyPackageTargetMatrix,
@@ -20,6 +21,7 @@ function validRepository() {
       ".nvmrc": "24.16.0\n",
       "docs/PROJECT.md":
         "Node `24.16.0`, npm `11.13.0`, Docker base `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0`, RTK `v0.42.4`, context-mode `1.0.162`, `actions/checkout@v6`, `actions/setup-node@v6`, `superfly/flyctl-actions/setup-flyctl@v1`, `dependabot/fetch-metadata@v3`, `cors@2.8.6`, `dotenv@17.4.2`, `express@5.2.1`, `express-rate-limit@8.5.2`, `moment@2.30.1`, `@types/cors@2.8.19`, `@types/express@5.0.6`, `@types/node@24.13.2`, `@vitest/coverage-v8@4.1.8`, `prettier@3.8.4`, `typescript@6.0.3`, `vitest@4.1.8`, `vitest-mock-express@2.2.0`.",
+      ".github/workflows/pipeline.yml": validCiWorkflow(),
       "package-lock.json": JSON.stringify({
         lockfileVersion: 3,
         packages: {
@@ -82,6 +84,110 @@ function validRepository() {
         "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/v0.42.4/install.sh | sh\nnpm install -g context-mode@1.0.162\n",
     },
   };
+}
+
+function validCiWorkflow() {
+  return `name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  install:
+    name: ci/install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: npm install -g npm@11.13.0
+      - run: npm ci
+
+  audit-signatures:
+    name: ci/audit-signatures
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: npm install -g npm@11.13.0
+      - run: npm ci
+      - run: npm audit signatures --min-release-age=0
+
+  audit-vulnerabilities:
+    name: ci/audit-vulnerabilities
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: npm install -g npm@11.13.0
+      - run: npm ci
+      - run: npm audit --audit-level=high
+
+  format:
+    name: ci/format
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: npm install -g npm@11.13.0
+      - run: npm ci
+      - run: ./run.sh format
+
+  build:
+    name: ci/build
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: npm install -g npm@11.13.0
+      - run: npm ci
+      - run: ./run.sh build
+
+  test-coverage:
+    name: ci/test-coverage
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: npm install -g npm@11.13.0
+      - run: npm ci
+      - run: ./run.sh test
+
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - audit-signatures
+      - audit-vulnerabilities
+      - format
+      - build
+      - test-coverage
+    steps:
+      - uses: actions/checkout@v6
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+      - run: flyctl deploy -a flickr-service
+        env:
+          FLY_API_TOKEN: \${{ secrets.FLY_API_TOKEN }}
+`;
 }
 
 function mutateJson(
@@ -404,6 +510,177 @@ describe("dependency policy verifier", () => {
     );
     expect(verifyDependencyPolicy(repository).errors).not.toContain(
       "dependencies.cors must be 2.8.6 for Phase 3 landing evidence",
+    );
+  });
+
+  it("validates the Phase 4 CI workflow contract", () => {
+    expect(verifyCiWorkflow(validCiWorkflow()).errors).toEqual([]);
+
+    const repository = validRepository();
+    repository.files[".github/workflows/pipeline.yml"] =
+      "on:\n  push:\n    branches:\n      - main\njobs:\n  deploy:\n    steps:\n      - uses: actions/checkout@main\n      - run: npm install\n";
+
+    expect(
+      verifyCiWorkflow(repository.files[".github/workflows/pipeline.yml"])
+        .errors,
+    ).toEqual(
+      expect.arrayContaining([
+        "CI workflow must run on pull_request",
+        "CI workflow must expose ci/install as a job",
+        "CI workflow must run npm ci in every baseline job",
+        "CI workflow must set up Node from .nvmrc",
+        "CI workflow must ensure npm 11.13.0",
+        "CI workflow must use tracked non-floating GitHub Action refs",
+      ]),
+    );
+  });
+
+  it("accepts future tracked GitHub Action refs without changing landing proof docs", () => {
+    const repository = validRepository();
+    repository.files[".github/workflows/pipeline.yml"] = validCiWorkflow()
+      .replaceAll("actions/checkout@v6", "actions/checkout@v7")
+      .replaceAll("actions/setup-node@v6", "actions/setup-node@v7")
+      .replaceAll(
+        "superfly/flyctl-actions/setup-flyctl@v1",
+        "superfly/flyctl-actions/setup-flyctl@v2",
+      );
+
+    expect(
+      verifyCiWorkflow(repository.files[".github/workflows/pipeline.yml"])
+        .errors,
+    ).toEqual([]);
+    expect(verifyDependencyPolicy(repository).errors).toEqual([]);
+  });
+
+  it.each([
+    ["floating main", "actions/checkout@main"],
+    ["floating master", "actions/checkout@master"],
+    ["floating latest", "actions/checkout@latest"],
+    ["branch-like ref", "actions/checkout@release/v7"],
+    ["bare action", "actions/checkout"],
+    ["untracked action", "untracked/example-action@v1"],
+  ])("rejects CI workflow %s action refs", (_, actionRef) => {
+    const workflow = validCiWorkflow().replaceAll(
+      "actions/checkout@v6",
+      actionRef,
+    );
+
+    expect(verifyCiWorkflow(workflow).errors).toContain(
+      "CI workflow must use tracked non-floating GitHub Action refs",
+    );
+  });
+
+  it("rejects CI workflow drift that removes signature audit", () => {
+    const workflow = validCiWorkflow().replace(
+      "      - run: npm audit signatures --min-release-age=0\n",
+      "",
+    );
+
+    expect(verifyCiWorkflow(workflow).errors).toContain(
+      "CI workflow must run npm audit signatures --min-release-age=0",
+    );
+  });
+
+  it("rejects CI workflow drift that moves signature audit to the wrong job", () => {
+    const workflow = validCiWorkflow()
+      .replace(
+        "      - run: npm ci\n      - run: npm audit signatures --min-release-age=0\n\n  audit-vulnerabilities:",
+        "      - run: npm ci\n\n  audit-vulnerabilities:",
+      )
+      .replace(
+        "      - run: npm audit --audit-level=high",
+        "      - run: npm audit signatures --min-release-age=0\n      - run: npm audit --audit-level=high",
+      );
+
+    expect(verifyCiWorkflow(workflow).errors).toContain(
+      "CI workflow must run npm audit signatures --min-release-age=0",
+    );
+  });
+
+  it("rejects CI workflow drift that audits signatures before npm ci", () => {
+    const workflow = validCiWorkflow().replace(
+      "      - run: npm ci\n      - run: npm audit signatures --min-release-age=0",
+      "      - run: npm audit signatures --min-release-age=0\n      - run: npm ci",
+    );
+
+    expect(verifyCiWorkflow(workflow).errors).toContain(
+      "CI workflow must run npm ci before audit signatures",
+    );
+  });
+
+  it("rejects CI workflow drift that omits npm ci from signature audit", () => {
+    const workflow = validCiWorkflow().replace(
+      "      - run: npm ci\n      - run: npm audit signatures --min-release-age=0",
+      "      - run: npm audit signatures --min-release-age=0",
+    );
+
+    expect(verifyCiWorkflow(workflow).errors).toContain(
+      "CI workflow must run npm ci before audit signatures",
+    );
+  });
+
+  it("rejects CI workflow drift that omits npm ci from a required baseline job", () => {
+    const workflow = validCiWorkflow().replace(
+      "      - run: npm ci\n      - run: ./run.sh build",
+      "      - run: ./run.sh build",
+    );
+
+    expect(verifyCiWorkflow(workflow).errors).toContain(
+      "CI workflow must run npm ci in every baseline job",
+    );
+  });
+
+  it("rejects CI workflow drift that comments out a required baseline job command", () => {
+    const workflow = validCiWorkflow().replace(
+      "      - run: npm ci\n      - run: ./run.sh build",
+      "      # - run: npm ci\n      - run: ./run.sh build",
+    );
+
+    expect(verifyCiWorkflow(workflow).errors).toContain(
+      "CI workflow must run npm ci in every baseline job",
+    );
+  });
+
+  it("rejects CI workflow drift that comments out the deploy guard", () => {
+    const workflow = validCiWorkflow().replace(
+      "    if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+      "    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+    );
+
+    expect(verifyCiWorkflow(workflow).errors).toContain(
+      "CI deploy must run only for main pushes",
+    );
+  });
+
+  it("rejects CI workflow drift that omits Node setup from a required baseline job", () => {
+    const workflow = validCiWorkflow().replace(
+      `  test-coverage:
+    name: ci/test-coverage
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: npm install -g npm@11.13.0
+      - run: npm ci
+      - run: ./run.sh test`,
+      `  test-coverage:
+    name: ci/test-coverage
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v6
+      - run: npm ci
+      - run: ./run.sh test`,
+    );
+
+    expect(verifyCiWorkflow(workflow).errors).toEqual(
+      expect.arrayContaining([
+        "CI workflow must set up Node from .nvmrc",
+        "CI workflow must ensure npm 11.13.0",
+      ]),
     );
   });
 });
