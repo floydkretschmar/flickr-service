@@ -89,6 +89,16 @@ const trackedActionNames = [
   "actions/setup-node",
   "superfly/flyctl-actions/setup-flyctl",
 ];
+const dependabotEcosystems = ["npm", "docker", "github-actions"];
+const dependabotScheduleIntervals = [
+  "daily",
+  "weekly",
+  "monthly",
+  "quarterly",
+  "semiannually",
+  "yearly",
+  "cron",
+];
 
 export function verifyDependencyPolicy(repository = readRepository()) {
   const errors = [];
@@ -128,6 +138,10 @@ export function verifyDependencyPolicy(repository = readRepository()) {
       .errors,
   );
   errors.push(...verifyDockerfile(readFile(repository, "Dockerfile")).errors);
+  errors.push(
+    ...verifyDependabotConfig(readFile(repository, ".github/dependabot.yml"))
+      .errors,
+  );
   verifyRequiredLines(
     errors,
     "docs/PROJECT.md",
@@ -136,6 +150,109 @@ export function verifyDependencyPolicy(repository = readRepository()) {
   );
 
   return { errors };
+}
+
+export function verifyDependabotConfig(content) {
+  const errors = [];
+  const activeContent = uncommentedContent(content);
+  const updates = dependabotUpdates(activeContent);
+
+  if (!/^version:\s*2\s*$/m.test(activeContent)) {
+    errors.push("Dependabot config must use version: 2");
+  }
+
+  const updatesByEcosystem = Map.groupBy(
+    updates,
+    (update) => update["package-ecosystem"],
+  );
+
+  if (
+    [...updatesByEcosystem.keys()].some(
+      (ecosystem) => !dependabotEcosystems.includes(ecosystem),
+    )
+  ) {
+    errors.push("Dependabot config must include only Phase 6 ecosystems");
+  }
+
+  for (const update of updates) {
+    if (update.directory !== "/") {
+      errors.push(
+        `Dependabot config must include ${update["package-ecosystem"]} updates at /`,
+      );
+    }
+
+    if (!dependabotScheduleIntervals.includes(update.scheduleInterval)) {
+      errors.push(
+        "Dependabot config must set a supported schedule.interval for every ecosystem",
+      );
+    }
+
+    if (update.cooldownDefaultDays !== "7") {
+      errors.push(
+        "Dependabot config must set cooldown.default-days: 7 for every ecosystem",
+      );
+    }
+  }
+
+  for (const ecosystem of dependabotEcosystems) {
+    const ecosystemUpdates = updatesByEcosystem.get(ecosystem) ?? [];
+    const update = ecosystemUpdates[0];
+
+    if (ecosystemUpdates.length !== 1) {
+      errors.push(
+        "Dependabot config must include each Phase 6 ecosystem exactly once",
+      );
+    }
+
+    if (!update || update.directory !== "/") {
+      errors.push(`Dependabot config must include ${ecosystem} updates at /`);
+    }
+
+    if (!update?.scheduleInterval) {
+      errors.push(
+        "Dependabot config must set schedule.interval for every ecosystem",
+      );
+    }
+  }
+
+  return { errors };
+}
+
+function dependabotUpdates(content) {
+  const updatesContent =
+    content.match(/^updates:\s*\n((?:[ \t].*(?:\n|$)|\s*\n)*)/m)?.[1] ?? "";
+
+  return updatesContent
+    .split(/\n(?=\s*-\s+)/)
+    .filter((block) => /^\s*-\s+/.test(block))
+    .map((block) => ({
+      "package-ecosystem": yamlScalar(block, "package-ecosystem"),
+      directory: yamlScalar(block, "directory"),
+      scheduleInterval: nestedYamlScalar(block, "schedule", "interval"),
+      cooldownDefaultDays: nestedYamlScalar(block, "cooldown", "default-days"),
+    }));
+}
+
+function nestedYamlScalar(block, parent, key) {
+  return yamlScalar(
+    block.match(
+      new RegExp(`^\\s*${parent}:\\s*\\n([\\s\\S]*?)(?=^\\s{4}\\S|$)`, "m"),
+    )?.[1] ?? "",
+    key,
+  );
+}
+
+function yamlScalar(content, key) {
+  return (
+    content
+      .match(
+        new RegExp(
+          `^\\s*(?:-\\s+)?${escapeRegExp(key)}:\\s*"?([^"\\n]+)"?\\s*$`,
+          "m",
+        ),
+      )?.[1]
+      ?.trim() ?? ""
+  );
 }
 
 export function verifyCiWorkflow(content) {
@@ -304,7 +421,9 @@ function finalDockerStageUsesBase(stages, baseStage) {
 }
 
 function dockerStageUsesBase(stages, alias) {
-  return stages.some((stage) => stage.alias === alias && stage.image === "base");
+  return stages.some(
+    (stage) => stage.alias === alias && stage.image === "base",
+  );
 }
 
 function finalDockerStageContent(content, stages) {

@@ -27,9 +27,9 @@
 - [x] Phase 2 live validation enforces only Phase 2-owned live files and uses fixtures or documentation-presence checks for later CI, Docker, Dependabot, and automerge surfaces until those phases activate live validation.
 - [x] `scripts/verify-dependency-policy.mjs` has public-entrypoint coverage through `npm run verify:policy`.
 - [x] `npm run verify:policy` is wired into `./run.sh test` and fails before runtime/dependency metadata changes make it pass.
-- [ ] Docker base image is pinned by digest and tracked by Dependabot.
-- [ ] Dependabot updates npm, Docker, and GitHub Actions with a 7-day cooldown.
-- [ ] Dependabot config is runnable with `version: 2`, required `package-ecosystem`, `directory: "/"`, and `schedule.interval` fields.
+- [x] Docker base image is pinned by digest and tracked by Dependabot.
+- [x] Dependabot updates npm, Docker, and GitHub Actions with a 7-day cooldown.
+- [x] Dependabot config is runnable with `version: 2`, required `package-ecosystem`, `directory: "/"`, and `schedule.interval` fields.
 - [ ] npm and Docker automerge allows only `version-update:semver-patch` and `version-update:semver-minor` after green CI; major, `security-update:*`, unsupported, and unknown metadata types are blocked.
 - [ ] GitHub Actions automerge allows only `version-update:*` metadata after green CI; `security-update:*`, unsupported, and unknown metadata types are blocked.
 - [ ] Dependabot automerge does not check out or execute PR code with elevated permissions.
@@ -55,7 +55,7 @@
 - [x] Phase 3: Minimal Toolchain And Package Upgrade
 - [x] Phase 4: CI Baseline Before Deploy
 - [x] Phase 5: Reproducible Docker Runtime
-- [ ] Phase 6: Dependabot Update Policy
+- [x] Phase 6: Dependabot Update Policy
 - [ ] Phase 7: Safe Dependabot Automerge
 - [ ] Phase 8: Final Evidence And Cleanup
 - [ ] Final verification
@@ -79,9 +79,12 @@
 - [x] Slice 5: Reproducible Docker runtime
   - RED command + failure: `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` failed after adding Dockerfile runtime-contract coverage because `verifyDockerfile` did not exist yet.
   - GREEN command + pass: `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` passed with 38 tests after adding Dockerfile validation, pinning the Docker base to `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0`, preserving `npm ci`, TypeScript build, development dependency pruning, `EXPOSE 3000`, and starting the compiled API with `node build/index.js`. Refactor proof passed with the same command after tightening Dockerfile instruction matching. Review addendum RED proved a future valid Docker base refresh failed when `docs/PROJECT.md` no longer documented the original digest; after removing that permanent documentation freeze while preserving Dockerfile shape validation, the same command passed with 39 tests. Second review addendum RED proved exact Phase 5 Docker target proof was missing and a Node 22 final runtime stage passed when another stage used a Node 24 pinned base; after adding separate one-time target proof and durable final-stage inheritance validation, the same command passed with 41 tests. Third review addendum RED proved a direct Node 24 digest-pinned final runtime stage still passed without inheriting `FROM base`; after requiring final runtime inheritance from the verified `base` alias and changing exact Phase 5 target proof to read the live repository `Dockerfile`, the same command passed with 41 tests. Fourth review addendum RED proved a digest-pinned Node 24 stage aliased as `runtime` with final `FROM runtime` incorrectly passed; after requiring the verified digest-pinned stage alias to be exactly `base` and the final runtime stage to be exactly `FROM base`, `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` passed with 40 tests. Fifth review addendum RED proved a Node 22 build stage aliased as `build` still passed when the final runtime stage used `FROM base`; after requiring `FROM base as build` and the final-stage `COPY --from=build /app /app` handoff, `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` passed with 42 tests. Sixth review addendum RED proved a correct build-stage `CMD [ "node", "build/index.js" ]` hid a wrong final runtime `CMD [ "npm", "start" ]`; after checking the start command only inside the final runtime stage content, `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` passed with 43 tests, and the refactor rerun also passed with 43 tests. The default Vitest suite no longer reads the live Dockerfile for exact Phase 5 digest proof; exact landing evidence is recorded here as `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0`, while durable `verifyDependencyPolicy` remains future-refresh tolerant.
-- [ ] Slice 6: Dependabot update policy
-  - RED command + failure:
-  - GREEN command + pass:
+- [x] Slice 6: Dependabot update policy
+  - RED command + failure: `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` failed after adding Dependabot fixture coverage because `verifyDependabotConfig` did not exist. After wiring the verifier into live policy, `rtk npm run verify:policy` failed against the repository because `.github/dependabot.yml` was missing `version: 2`, npm, Docker, GitHub Actions, `schedule.interval`, and `cooldown.default-days: 7`.
+  - GREEN command + pass: `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` passed with 44 tests and `rtk npm run verify:policy` passed after adding `.github/dependabot.yml` with root npm, Docker, and GitHub Actions update entries, weekly schedules, and `cooldown.default-days: 7`. Refactor proof passed with the same verifier test after cleanup.
+  - Review addendum RED/GREEN: `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` failed after adding renamed top-level `not-updates:` coverage because `verifyDependabotConfig` still accepted dash-starting ecosystem blocks outside real top-level `updates:`. After limiting Dependabot update parsing to indented entries under top-level `updates:`, the same command passed with 45 tests.
+  - Review addendum RED/GREEN: `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` failed after adding focused coverage for an unsupported extra update entry, a duplicate npm entry missing cooldown defaults, and `schedule.interval: "bogus"` because `verifyDependabotConfig` only searched for expected ecosystems and accepted any schedule interval string. After validating every parsed update entry, rejecting unsupported and duplicate Phase 6 ecosystems, and allowing only known Dependabot schedule intervals, the same command passed with 48 tests; the refactor rerun also passed with 48 tests.
+  - Review addendum RED/GREEN: `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` failed after adding focused coverage for nested `metadata.version: 2` without top-level `version: 2` and `schedule.interval: "cron"` with `cronjob` because `verifyDependabotConfig` accepted indented version keys and omitted `cron` from supported intervals. After requiring column-0 `version: 2` and adding `cron` to the supported Dependabot schedule intervals, the same command passed with 50 tests.
 - [ ] Slice 7: Safe Dependabot automerge
   - RED command + failure:
   - GREEN command + pass:
@@ -104,3 +107,5 @@ Phase 3 complete. Automated verification passed for `rtk npm ci`, `rtk ./run.sh 
 Phase 4 complete. Automated verifier proof passed for `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` and `rtk npm run verify:policy`. CI now runs the validation baseline on pull requests and `main`, exposes the required `ci/*` check names, and deploys to Fly only for `main` pushes after validation gates.
 
 Phase 5 complete. Automated verifier proof passed for `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts`. Docker now uses the reviewed Node 24 Alpine digest, keeps `npm ci`, TypeScript build, development dependency pruning, and port `3000`, and starts the compiled API directly with `node build/index.js`. Dependabot Docker tracking remains deferred to Phase 6.
+
+Phase 6 complete. Automated verifier proof passed for `rtk npm test -- --run src/tests/verifyDependencyPolicy.test.ts` and `rtk npm run verify:policy`. Dependabot now tracks npm, Docker, and GitHub Actions at `directory: "/"` with weekly schedules and `cooldown.default-days: 7`; Docker digest refresh coverage is enabled by the root Docker ecosystem entry.

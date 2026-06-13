@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 
 import {
   verifyCiWorkflow,
+  verifyDependabotConfig,
   verifyDependencyPolicy,
   verifyDockerfile,
   verifyFinalNpmPolicy,
@@ -23,6 +24,7 @@ function validRepository() {
       "docs/PROJECT.md":
         "Node `24.16.0`, npm `11.13.0`, Docker base `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0`, RTK `v0.42.4`, context-mode `1.0.162`, `actions/checkout@v6`, `actions/setup-node@v6`, `superfly/flyctl-actions/setup-flyctl@v1`, `dependabot/fetch-metadata@v3`, `cors@2.8.6`, `dotenv@17.4.2`, `express@5.2.1`, `express-rate-limit@8.5.2`, `moment@2.30.1`, `@types/cors@2.8.19`, `@types/express@5.0.6`, `@types/node@24.13.2`, `@vitest/coverage-v8@4.1.8`, `prettier@3.8.4`, `typescript@6.0.3`, `vitest@4.1.8`, `vitest-mock-express@2.2.0`.",
       Dockerfile: validDockerfile(),
+      ".github/dependabot.yml": validDependabotConfig(),
       ".github/workflows/pipeline.yml": validCiWorkflow(),
       "package-lock.json": JSON.stringify({
         lockfileVersion: 3,
@@ -86,6 +88,32 @@ function validRepository() {
         "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/v0.42.4/install.sh | sh\nnpm install -g context-mode@1.0.162\n",
     },
   };
+}
+
+function validDependabotConfig() {
+  return `version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+`;
 }
 
 function validDockerfile() {
@@ -594,6 +622,99 @@ describe("dependency policy verifier", () => {
     expect(verifyDependencyPolicy().errors).not.toContain(
       "Dockerfile base image must be Node 24 Alpine pinned by digest",
     );
+  });
+
+  it("validates Dependabot update intake for npm, Docker, and GitHub Actions", () => {
+    expect(verifyDependabotConfig(validDependabotConfig()).errors).toEqual([]);
+
+    const invalidConfig = validDependabotConfig()
+      .replace("version: 2\n", "")
+      .replace('- package-ecosystem: "npm"', '- directory: "/"')
+      .replace(
+        '- package-ecosystem: "docker"',
+        '- package-ecosystem: "docker"\n    directory: "/app"',
+      )
+      .replace('interval: "weekly"', "")
+      .replace("default-days: 7", "default-days: 3");
+
+    expect(verifyDependabotConfig(invalidConfig).errors).toEqual(
+      expect.arrayContaining([
+        "Dependabot config must use version: 2",
+        "Dependabot config must include npm updates at /",
+        "Dependabot config must include docker updates at /",
+        "Dependabot config must set schedule.interval for every ecosystem",
+        "Dependabot config must set cooldown.default-days: 7 for every ecosystem",
+      ]),
+    );
+  });
+
+  it("requires Dependabot version: 2 at the top level", () => {
+    expect(
+      verifyDependabotConfig(
+        validDependabotConfig().replace(
+          "version: 2\n",
+          "metadata:\n  version: 2\n",
+        ),
+      ).errors,
+    ).toContain("Dependabot config must use version: 2");
+  });
+
+  it("accepts Dependabot cron schedules", () => {
+    expect(
+      verifyDependabotConfig(
+        validDependabotConfig().replaceAll(
+          'interval: "weekly"',
+          'interval: "cron"\n      cronjob: "0 8 * * 1"',
+        ),
+      ).errors,
+    ).toEqual([]);
+  });
+
+  it("requires Dependabot updates to be under the top-level updates key", () => {
+    expect(
+      verifyDependabotConfig(
+        validDependabotConfig().replace("updates:", "not-updates:"),
+      ).errors,
+    ).toEqual(
+      expect.arrayContaining([
+        "Dependabot config must include npm updates at /",
+        "Dependabot config must include docker updates at /",
+        "Dependabot config must include github-actions updates at /",
+      ]),
+    );
+  });
+
+  it.each([
+    [
+      "unsupported ecosystem",
+      `${validDependabotConfig()}
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`,
+      "Dependabot config must include only Phase 6 ecosystems",
+    ],
+    [
+      "duplicate ecosystem",
+      `${validDependabotConfig()}
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`,
+      "Dependabot config must include each Phase 6 ecosystem exactly once",
+    ],
+    [
+      "unsupported schedule interval",
+      validDependabotConfig().replace(
+        'interval: "weekly"',
+        'interval: "bogus"',
+      ),
+      "Dependabot config must set a supported schedule.interval for every ecosystem",
+    ],
+  ])("rejects Dependabot %s entries", (_name, content, error) => {
+    expect(verifyDependabotConfig(content).errors).toContain(error);
   });
 
   it("requires the final Docker runtime stage to inherit the Node 24 digest-pinned base", () => {
