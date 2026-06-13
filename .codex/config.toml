@@ -1,0 +1,99 @@
+[features]
+multi_agent = true
+hooks = true
+
+[agents.backend_developer]
+config_file = "./agents/backend_developer.toml"
+[agents.business_analyst]
+config_file = "./agents/business_analyst.toml"
+[agents.frontend_developer]
+config_file = "./agents/frontend_developer.toml"
+[agents.software_architect]
+config_file = "./agents/software_architect.toml"
+[agents.qa_engineer]
+config_file = "./agents/qa_engineer.toml"
+[agents.review_developer]
+config_file = "./agents/review_developer.toml"
+
+[mcp_servers.context-mode]
+command = "context-mode"
+
+[mcp_servers.context-mode.env]
+CONTEXT_MODE_PLATFORM = "codex"
+
+[[hooks.PreToolUse]]
+matcher = "*"
+displayName = "Tool safety hook"
+description = "Blocks unsafe tool usage"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = '"$(git rev-parse --show-toplevel)/run.sh safety-hook"'
+timeout = 5
+statusMessage = "Dangerous tool-use guard"
+
+[[hooks.PreToolUse]]
+matcher = "^Bash$"
+displayName = "RTK Codex Guard"
+description = "Blocks supported noisy Bash commands and suggests RTK retries."
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = '"$(git rev-parse --show-toplevel)/run.sh rtk-hook"'
+timeout = 5
+statusMessage = "Suggesting RTK for noisy command"
+
+[[hooks.PreToolUse]]
+matcher = "local_shell|shell|shell_command|exec_command|Bash|Shell|apply_patch|Edit|Write|grep_files|ctx_execute|ctx_execute_file|ctx_batch_execute|ctx_fetch_and_index|ctx_search|ctx_index|mcp__"
+displayName = "PreToolUse context mode"
+description = "Enables context-mode for PreToolUse"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "context-mode hook codex pretooluse"
+statusMessage = "Execute context-mode for PreToolUse"
+
+[[hooks.PostToolUse]]
+displayName = "PostToolUse context mode"
+description = "Enables context-mode for PostToolUse"
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "context-mode hook codex posttooluse"
+statusMessage = "Execute context-mode for PostToolUse"
+
+[[hooks.SessionStart]]
+displayName = "SessionStart context mode"
+description = "Enables context-mode for SessionStart"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "context-mode hook codex sessionstart"
+statusMessage = "Execute context-mode for SessionStart"
+
+[[hooks.PreCompact]]
+displayName = "PreCompact context mode"
+description = "Enables context-mode for PreCompact"
+
+[[hooks.PreCompact.hooks]]
+type = "command"
+command = "context-mode hook codex precompact"
+statusMessage = "Execute context-mode for PreCompact"
+
+[[hooks.UserPromptSubmit]]
+displayName = "UserPromptSubmit context mode"
+description = "Enables context-mode for UserPromptSubmit"
+
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = "context-mode hook codex userpromptsubmit"
+statusMessage = "Execute context-mode for UserPromptSubmit"
+
+[[hooks.Stop]]
+displayName = "Stop context mode"
+description = "Enables context-mode for Stop"
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = "context-mode hook codex stop"
+statusMessage = "Execute context-mode for Stop"
