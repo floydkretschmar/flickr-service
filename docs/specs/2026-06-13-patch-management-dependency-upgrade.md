@@ -87,16 +87,16 @@ The policy verifier must fail if any of the following are false:
 
 ### Runtime And Tooling Matrix
 
-| Item | Target |
-|---|---:|
-| Node | `24.16.0` |
-| npm | `11.13.0` |
-| `packageManager` | `npm@11.13.0` |
-| `engines.node` | `24.16.0` |
-| `.nvmrc` | `24.16.0` |
-| Docker base | `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0` |
-| RTK bootstrap | `v0.42.4` |
-| `context-mode` bootstrap | `1.0.162` |
+| Item                     |                                                                                        Target |
+| ------------------------ | --------------------------------------------------------------------------------------------: |
+| Node                     |                                                                                     `24.16.0` |
+| npm                      |                                                                                     `11.13.0` |
+| `packageManager`         |                                                                                 `npm@11.13.0` |
+| `engines.node`           |                                                                                     `24.16.0` |
+| `.nvmrc`                 |                                                                                     `24.16.0` |
+| Docker base              | `node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0` |
+| RTK bootstrap            |                                                                                     `v0.42.4` |
+| `context-mode` bootstrap |                                                                                     `1.0.162` |
 
 Node `24.16.0` metadata was verified from the official Node release index. It ships npm `11.13.0`, V8 `13.6.233.17`, OpenSSL `3.5.6`, and LTS codename `Krypton`.
 
@@ -106,28 +106,28 @@ All direct package versions must be exact string pins in `package.json`.
 
 Production dependencies:
 
-| Package | Target |
-|---|---:|
-| `cors` | `2.8.6` |
-| `dotenv` | `17.4.2` |
-| `express` | `5.2.1` |
-| `express-rate-limit` | `8.5.2` |
-| `moment` | `2.30.1` |
-| `express-validator` | remove |
+| Package              |   Target |
+| -------------------- | -------: |
+| `cors`               |  `2.8.6` |
+| `dotenv`             | `17.4.2` |
+| `express`            |  `5.2.1` |
+| `express-rate-limit` |  `8.5.2` |
+| `moment`             | `2.30.1` |
+| `express-validator`  |   remove |
 
 Development dependencies:
 
-| Package | Target |
-|---|---:|
-| `@types/cors` | `2.8.19` |
-| `@types/express` | `5.0.6` |
-| `@types/node` | `24.13.2` |
-| `@vitest/coverage-v8` | `4.1.8` |
-| `prettier` | `3.8.4` |
-| `typescript` | `6.0.3` |
-| `vitest` | `4.1.8` |
-| `vitest-mock-express` | `2.2.0` |
-| `@flydotio/dockerfile` | remove |
+| Package                |    Target |
+| ---------------------- | --------: |
+| `@types/cors`          |  `2.8.19` |
+| `@types/express`       |   `5.0.6` |
+| `@types/node`          | `24.13.2` |
+| `@vitest/coverage-v8`  |   `4.1.8` |
+| `prettier`             |   `3.8.4` |
+| `typescript`           |   `6.0.3` |
+| `vitest`               |   `4.1.8` |
+| `vitest-mock-express`  |   `2.2.0` |
+| `@flydotio/dockerfile` |    remove |
 
 `@types/node` must use the latest Node 24 type line, not the latest Node 25 type package. The verified latest Node 24 type package is `24.13.2`.
 
@@ -160,21 +160,21 @@ Update CI so pull requests and `main` both run the full baseline.
 
 Use tracked major action refs, with Dependabot responsible for keeping them current:
 
-| Action | Ref |
-|---|---:|
-| `actions/checkout` | `v6` |
-| `actions/setup-node` | `v6` |
+| Action                                 |  Ref |
+| -------------------------------------- | ---: |
+| `actions/checkout`                     | `v6` |
+| `actions/setup-node`                   | `v6` |
 | `superfly/flyctl-actions/setup-flyctl` | `v1` |
-| `dependabot/fetch-metadata` | `v3` |
+| `dependabot/fetch-metadata`            | `v3` |
 
 Latest observed tags on 2026-06-13 were:
 
-| Action | Latest observed tag |
-|---|---:|
-| `actions/checkout` | `v6.0.3` |
-| `actions/setup-node` | `v6.4.0` |
-| `superfly/flyctl-actions/setup-flyctl` | `v1.4` |
-| `dependabot/fetch-metadata` | `v3.1.0` |
+| Action                                 | Latest observed tag |
+| -------------------------------------- | ------------------: |
+| `actions/checkout`                     |            `v6.0.3` |
+| `actions/setup-node`                   |            `v6.4.0` |
+| `superfly/flyctl-actions/setup-flyctl` |              `v1.4` |
+| `dependabot/fetch-metadata`            |            `v3.1.0` |
 
 CI must:
 

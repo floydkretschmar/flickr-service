@@ -1,4 +1,5 @@
 ## Testing Principles
+
 - **Test driven**: You test before you build. Never the other way around.
 - **Tests are not optional**: Never skip tests to "move faster"
 - **Test parity**: Every load-bearing class or module must have a corresponding test file before a task can be considered complete.
@@ -7,6 +8,7 @@
 - **Visual verification**: User-facing surface changes require a full Browser visual check of the affected screens and controls in addition to automated tests.
 
 ## Testing Conventions
+
 - **No empty tests**: Every test must include meaningful assertions and follow the Arrange-Act-Assert pattern.
 - **Prefer holistic tests**: Merge multiple tests that are testing partial logic into a single test that tests the entire critical path.
 - **Share fixtures within modules**: Extract any shared setup or fixture logic into a single fixture file adjacent to the test files and reuse it.Fixtures HAVE to stay local in a module. Do not centralize them or cross-reference them across modules.
@@ -17,6 +19,7 @@
 - **No contract assertions in tests**: Keep unit and strategy tests focused on public behavior of the module under test.
 
 ### Other Conventions
+
 - Test package paths must mirror main package paths exactly; integration-test grouping must still align with corresponding implementation slice/package.
 - Never add dedicated tests for pure cleanup-only changes such as dead-code removal, catalog pruning, or unused-import deletion when no user-visible behavior changes; verify existing behavior instead of introducing brittle cleanup tests.
 
@@ -135,6 +138,7 @@ generic_client:
 ```
 
 The SDK approach means:
+
 - Each mock returns one specific shape
 - No conditional logic in test setup
 - Easier to see which endpoints a test exercises

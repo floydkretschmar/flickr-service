@@ -5,9 +5,10 @@
 **Spec:** docs/specs/2026-06-13-patch-management-dependency-upgrade.md
 
 ## Acceptance Criteria
+
 - [ ] `./run.sh test` runs `npm run verify:policy` and `npm run coverage` after the policy verifier is introduced.
-- [ ] `./run.sh format` checks maintained project files.
-- [ ] `./run.sh build` runs the TypeScript build.
+- [x] `./run.sh format` checks maintained project files.
+- [x] `./run.sh build` runs the TypeScript build.
 - [ ] Local, CI, and Docker runtime targets use Node `24.16.0` and npm `11.13.0`.
 - [ ] `.nvmrc` is exactly `24.16.0`.
 - [ ] `package.json` declares `engines.node` and `packageManager`.
@@ -48,7 +49,8 @@
 - [ ] Cleanup/final evidence does not add cleanup-only deletion-enforcement tests.
 
 ## Phases
-- [ ] Phase 1: Real Local Validation Gates
+
+- [x] Phase 1: Real Local Validation Gates
 - [ ] Phase 2: Runtime And Dependency Policy Contract
 - [ ] Phase 3: Minimal Toolchain And Package Upgrade
 - [ ] Phase 4: CI Baseline Before Deploy
@@ -59,9 +61,11 @@
 - [ ] Final verification
 
 ## TDD Slice Log (Required)
-- [ ] Slice 1: Real local validation gates
-  - RED command + failure:
-  - GREEN command + pass:
+
+- [x] Slice 1: Real local validation gates
+  - RED command + failure: `rtk npm test -- --run src/tests/runWrapper.test.ts` failed because `run.sh` placeholder `test`, `format`, and `build` commands did not invoke npm, and `package.json` had no maintained-file `format` script. After the approved unmatched-glob adjustment, the same command briefly failed because the test still expected the old Prettier command without `--no-error-on-unmatched-pattern`.
+  - GREEN command + pass: `rtk npm test -- --run src/tests/runWrapper.test.ts` passed after wiring `./run.sh test` to `npm run coverage`, `./run.sh format` to `npm run format`, `./run.sh build` to `npm run build`, and updating the package `format` script to the approved maintained-file Prettier scope with `--no-error-on-unmatched-pattern`. Baseline verification also passed: `rtk ./run.sh test`, `rtk ./run.sh format`, and `rtk ./run.sh build`.
+  - Review addendum RED/GREEN: `rtk rg -n 'placeholders|placeholder|test.*format.*build.*placeholders' docs/PROJECT.md` first found stale placeholder wording in the `run.sh` module summary. After updating that summary to describe the real wrapper gates, the same stale-text check found no matches; baseline verification passed again with `rtk ./run.sh test`, `rtk ./run.sh format`, and `rtk ./run.sh build`.
 - [ ] Slice 2: Runtime and dependency policy contract
   - RED command + failure:
   - GREEN command + pass:
@@ -85,7 +89,9 @@
   - GREEN command + pass:
 
 ## Working Notes
+
 [Empty - filled during implementation]
 
 ## Results
-[Empty - filled after completion]
+
+Phase 1 complete. Automated verification passed for `rtk ./run.sh test`, `rtk ./run.sh format`, and `rtk ./run.sh build`.

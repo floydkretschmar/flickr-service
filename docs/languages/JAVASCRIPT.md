@@ -1,4 +1,5 @@
 ## Coding conventions
+
 - Use ES modules with proper import sorting and extensions
 - Prefer `function` keyword over arrow functions
 - Use explicit return type annotations for top-level functions
