@@ -16,18 +16,19 @@ setup_environment() {
   if command -v rtk >/dev/null 2>&1; then
     echo "rtk already available"
   else
-    curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
+    curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/v0.42.4/install.sh | sh
   fi
 
   if command -v context-mode >/dev/null 2>&1; then
     echo "context-mode already available"
   else
-    npm install -g context-mode
+    npm install -g context-mode@1.0.162
   fi
 }
 
 case "${1:-}" in
   test)
+    npm run verify:policy
     npm run coverage
     ;;
   format)

@@ -32,7 +32,7 @@ function runWithFakeNpm(command: string) {
 
 describe("run.sh validation gates", () => {
   it.each([
-    ["test", "run coverage"],
+    ["test", "run verify:policy\nrun coverage"],
     ["format", "run format"],
     ["build", "run build"],
   ])("runs npm for the %s gate", (command, expectedNpmArgs) => {
