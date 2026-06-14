@@ -86,6 +86,7 @@ describe("Server", () => {
     expect(use.mock.calls[0][0]).toEqual("/foo");
     const configuredRateLimitOptions = use.mock.calls[0][1];
     expect(configuredRateLimitOptions).toEqual({ windowMs: 60000, limit: 20 });
+    expect(configuredRateLimitOptions).not.toHaveProperty("ipv6Subnet");
 
     expect(get.mock.calls[0][0]).toEqual("/foo");
     expect(get.mock.calls[0][1]("test", "test")).toEqual("result");
