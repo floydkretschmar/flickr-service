@@ -31,7 +31,10 @@ jobs:
           UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
         run: |
           DESCRIPTION="$(jq -cn --arg ecosystem "$ECOSYSTEM" --arg directory "$DIRECTORY" --arg updateType "$UPDATE_TYPE" '{ecosystem:$ecosystem,directory:$directory,updateType:$updateType}')"
-          test "${#DESCRIPTION}" -le 140
+          if [ "${#DESCRIPTION}" -gt 140 ]; then
+            echo "::error title=Dependabot metadata too long::Metadata status description is ${#DESCRIPTION} characters, which exceeds GitHub's 140 character status description limit."
+            exit 1
+          fi
           gh api repos/${{ github.repository }}/statuses/"$HEAD_SHA" -f state=success -f context=dependabot/metadata -f description="$DESCRIPTION"
 
   automerge:
@@ -47,23 +50,50 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          fail() {
+            echo "::error title=$1::$2"
+            exit 1
+          }
+
           REQUIRED_CHECKS='["ci/install","ci/audit-signatures","ci/audit-vulnerabilities","ci/format","ci/build","ci/test-coverage"]'
           PR_COUNT="$(jq '[.workflow_run.pull_requests[]? | select(.number != null)] | length' "$GITHUB_EVENT_PATH")"
-          if [ "$PR_COUNT" -ne 1 ]; then exit 0; fi
+          if [ "$PR_COUNT" -ne 1 ]; then
+            echo "::notice title=Automerge skipped::Expected exactly one pull request on the workflow_run event, found $PR_COUNT."
+            exit 0
+          fi
           PR_NUMBER="$(jq -r '.workflow_run.pull_requests | map(select(.number != null)) | .[0].number' "$GITHUB_EVENT_PATH")"
-          PR="$(gh api repos/${{ github.repository }}/pulls/"$PR_NUMBER")"
+          PR="$(gh api repos/${{ github.repository }}/pulls/"$PR_NUMBER")" || fail "Pull request lookup failed" "Could not fetch pull request #$PR_NUMBER."
           PR_AUTHOR="$(jq -r '.user.login // ""' <<<"$PR")"
           PR_STATE="$(jq -r '.state // ""' <<<"$PR")"
-          if [ "$PR_AUTHOR" != "dependabot[bot]" ] || [ "$PR_STATE" != "open" ]; then exit 0; fi
+          if [ "$PR_AUTHOR" != "dependabot[bot]" ] || [ "$PR_STATE" != "open" ]; then
+            echo "::notice title=Automerge skipped::Pull request #$PR_NUMBER is authored by '$PR_AUTHOR' and is '$PR_STATE'."
+            exit 0
+          fi
           HEAD_SHA="$(jq -r '.head.sha // ""' <<<"$PR")"
-          if [ -z "$HEAD_SHA" ]; then exit 0; fi
-          STATUSES="$(gh api repos/${{ github.repository }}/commits/"$HEAD_SHA"/statuses)"
-          CHECKS="$(gh api repos/${{ github.repository }}/commits/"$HEAD_SHA"/check-runs)"
+          if [ -z "$HEAD_SHA" ]; then fail "Missing pull request head SHA" "Pull request #$PR_NUMBER did not include a head SHA."; fi
+          STATUSES="$(gh api repos/${{ github.repository }}/commits/"$HEAD_SHA"/statuses)" || fail "Commit statuses lookup failed" "Could not fetch commit statuses for $HEAD_SHA."
+          CHECKS="$(gh api repos/${{ github.repository }}/commits/"$HEAD_SHA"/check-runs)" || fail "Check runs lookup failed" "Could not fetch check runs for $HEAD_SHA."
           node --input-type=module - "$HEAD_SHA" "$STATUSES" "$CHECKS" "$REQUIRED_CHECKS" <<'NODE'
           const [headSha, statusesJson, checksJson, requiredChecksJson] = process.argv.slice(2);
-          const statuses = JSON.parse(statusesJson);
-          const checks = JSON.parse(checksJson).check_runs ?? [];
-          const requiredChecks = JSON.parse(requiredChecksJson);
+          const escapeAnnotation = (value) => String(value).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+          const fail = (title, message) => {
+            console.error(`::error title=${escapeAnnotation(title)}::${escapeAnnotation(message)}`);
+            process.exit(1);
+          };
+          const parseJson = (label, value) => {
+            try {
+              return JSON.parse(value);
+            } catch (error) {
+              fail(`${label} is invalid JSON`, error instanceof Error ? error.message : String(error));
+            }
+          };
+          const statuses = parseJson("Commit statuses", statusesJson);
+          const checksResponse = parseJson("Check runs", checksJson);
+          const requiredChecks = parseJson("Required checks", requiredChecksJson);
+          if (!Array.isArray(statuses)) fail("Commit statuses response is invalid", "Expected GitHub statuses API to return an array.");
+          if (!Array.isArray(checksResponse.check_runs)) fail("Check runs response is invalid", "Expected GitHub check-runs API to return a check_runs array.");
+          if (!Array.isArray(requiredChecks) || !requiredChecks.every((check) => typeof check === "string")) fail("Required checks configuration is invalid", "REQUIRED_CHECKS must be a JSON array of strings.");
+          const checks = checksResponse.check_runs;
           const matchingStatuses = statuses
             .filter((status) => status.context === "dependabot/metadata")
             .map((status, index) => ({ ...status, index, timestamp: Date.parse(status.created_at ?? "") }));
@@ -75,18 +105,21 @@ jobs:
           const metadataStatus = latestStatuses.every((status) => status.state === latestStatuses[0]?.state && status.description === latestStatuses[0]?.description)
             ? latestStatuses[0]
             : undefined;
-          if (!metadataStatus || metadataStatus.description.length > 140) process.exit(1);
-          if (metadataStatus.state !== "success") process.exit(1);
-          const metadata = JSON.parse(metadataStatus.description);
-          if (metadataStatus.description !== JSON.stringify(metadata)) process.exit(1);
+          if (!metadataStatus) fail("Dependabot metadata missing", "No unambiguous latest dependabot/metadata status was found for this commit.");
+          if (typeof metadataStatus.description !== "string") fail("Dependabot metadata description missing", "dependabot/metadata status did not include a string description.");
+          if (metadataStatus.description.length > 140) fail("Dependabot metadata too long", `Metadata status description is ${metadataStatus.description.length} characters, which exceeds GitHub's 140 character status description limit.`);
+          if (metadataStatus.state !== "success") fail("Dependabot metadata failed", `dependabot/metadata status is '${metadataStatus.state}', not 'success'.`);
+          const metadata = parseJson("Dependabot metadata", metadataStatus.description);
+          if (metadataStatus.description !== JSON.stringify(metadata)) fail("Dependabot metadata is not canonical JSON", "Metadata status description must match the compact JSON generated by the metadata job.");
           const keys = Object.keys(metadata).sort().join(",");
-          if (keys !== "directory,ecosystem,updateType") process.exit(1);
-          if (!["ecosystem", "directory", "updateType"].every((key) => typeof metadata[key] === "string")) process.exit(1);
-          if (metadata.updateType.startsWith("security-update:")) process.exit(1);
+          if (keys !== "directory,ecosystem,updateType") fail("Dependabot metadata has unexpected keys", `Expected directory,ecosystem,updateType but found '${keys}'.`);
+          if (!["ecosystem", "directory", "updateType"].every((key) => typeof metadata[key] === "string")) fail("Dependabot metadata has invalid values", "ecosystem, directory, and updateType must all be strings.");
+          if (metadata.updateType.startsWith("security-update:")) fail("Security update requires manual merge", `Automerge is disabled for '${metadata.updateType}'.`);
           const allowedNpmOrDocker = ["npm", "npm_and_yarn", "docker"].includes(metadata.ecosystem) && ["version-update:semver-patch", "version-update:semver-minor"].includes(metadata.updateType);
           const allowedActions = metadata.ecosystem === "github-actions" && metadata.updateType.startsWith("version-update:");
-          if (!allowedNpmOrDocker && !allowedActions) process.exit(1);
+          if (!allowedNpmOrDocker && !allowedActions) fail("Dependabot update is outside automerge policy", `Automerge is not allowed for ecosystem '${metadata.ecosystem}' with update type '${metadata.updateType}'.`);
           const greenChecks = new Set(checks.filter((check) => check.head_sha === headSha && check.conclusion === "success").map((check) => check.name));
-          if (!requiredChecks.every((check) => greenChecks.has(check))) process.exit(1);
+          const missingChecks = requiredChecks.filter((check) => !greenChecks.has(check));
+          if (missingChecks.length) fail("Required checks are not green", `Missing successful checks for ${headSha}: ${missingChecks.join(", ")}.`);
           NODE
-          gh pr merge "$PR_NUMBER" --auto --match-head-commit "$HEAD_SHA"
+          gh pr merge "$PR_NUMBER" --auto --match-head-commit "$HEAD_SHA" || fail "Enable auto-merge failed" "Could not enable auto-merge for pull request #$PR_NUMBER at $HEAD_SHA."
