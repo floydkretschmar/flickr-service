@@ -1,5 +1,7 @@
 # Patch Management And Dependency Upgrade
 
+> Superseded note, 2026-06-14: the owner requested removal of the custom repository dependency-policy verifier. `scripts/verify-dependency-policy.mjs`, `npm run verify:policy`, and verifier-specific tests are no longer part of the current implementation. Treat older verifier-specific requirements in this spec as historical context; the active gates are install, audit, format, build, test/coverage, Dependabot, Docker, and safe automerge.
+
 ## Problem Statement
 
 The service currently lacks a reliable patch-management contract. The project is pinned to Node 22 in `.nvmrc`, Docker, and GitHub Actions, while the local environment may use a different runtime. Direct npm dependencies use caret ranges, `package.json` has no runtime or package-manager enforcement, CI uses `npm install`, and `run.sh` declares required validation targets that are currently placeholders.

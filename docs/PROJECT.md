@@ -15,9 +15,9 @@
 | **run.sh**                         | Repository command wrapper for Codex hooks and environment setup; `test` runs coverage, `format` runs the maintained-file Prettier check, and `build` runs the TypeScript build.                      |
 | **.codex**                         | Local Codex agent, skill, MCP, RTK, safety-hook, and context-mode configuration for repository work.                                                                                                  |
 
-## Runtime And Dependency Policy
+## Runtime And Dependency Baseline
 
-Phase 5 landing evidence records the reviewed runtime, package, Docker, and maintenance matrix without freezing future Dependabot version movement in the ongoing verifier.
+This section records the current runtime, package, Docker, and maintenance baseline for maintainers. The project does not use a custom repository policy verifier to enforce these specific versions; dependency updates are handled through Dependabot and the normal install, audit, format, build, and test gates.
 
 | Item                     | Target                                                                                        |
 | ------------------------ | --------------------------------------------------------------------------------------------- |
@@ -34,7 +34,7 @@ Phase 5 landing evidence records the reviewed runtime, package, Docker, and main
 | Fly setup action         | `superfly/flyctl-actions/setup-flyctl@v1`                                                     |
 | Dependabot metadata      | `dependabot/fetch-metadata@v3`                                                                |
 
-Current direct production dependencies are exact pins for `cors@2.8.6`, `dotenv@17.4.2`, `express@5.2.1`, `express-rate-limit@8.5.2`, and `moment@2.30.1`. Current direct development dependencies are exact pins for `@types/cors@2.8.19`, `@types/express@5.0.6`, `@types/node@24.13.2`, `@vitest/coverage-v8@4.1.8`, `prettier@3.8.4`, `typescript@6.0.3`, `vitest@4.1.8`, and `vitest-mock-express@2.2.0`.
+Current direct production dependencies are `cors@2.8.6`, `dotenv@17.4.2`, `express@5.2.1`, `express-rate-limit@8.5.2`, and `moment@2.30.1`. Current direct development dependencies are `@types/cors@2.8.19`, `@types/express@5.0.6`, `@types/node@24.13.2`, `@vitest/coverage-v8@4.1.8`, `prettier@3.8.4`, `typescript@6.0.3`, `vitest@4.1.8`, and `vitest-mock-express@2.2.0`.
 
 ## Architectural conventions
 

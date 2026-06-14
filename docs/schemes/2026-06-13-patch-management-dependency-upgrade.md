@@ -2,6 +2,8 @@
 
 > Source spec: docs/specs/2026-06-13-patch-management-dependency-upgrade.md
 
+> Superseded note, 2026-06-14: the owner requested removal of the custom repository dependency-policy verifier. `scripts/verify-dependency-policy.mjs`, `npm run verify:policy`, and verifier-specific tests are no longer part of the current implementation. Treat older verifier-specific steps in this scheme as historical context; the active gates are install, audit, format, build, test/coverage, Dependabot, Docker, and safe automerge.
+
 ## Architectural decisions
 
 Durable decisions that apply across all phases:

@@ -28,7 +28,6 @@ setup_environment() {
 
 case "${1:-}" in
   test)
-    npm run verify:policy
     npm run coverage
     ;;
   format)
