@@ -27,7 +27,7 @@
     "@vitest/coverage-v8": "4.1.8",
     "prettier": "3.8.4",
     "typescript": "6.0.3",
-    "vitest": "4.1.8",
+    "vitest": "4.1.9",
     "vitest-mock-express": "2.2.0"
   },
   "engines": {
