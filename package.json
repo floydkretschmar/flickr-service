@@ -25,7 +25,7 @@
     "@types/express": "5.0.6",
     "@types/node": "24.13.2",
     "@vitest/coverage-v8": "4.1.8",
-    "prettier": "3.8.4",
+    "prettier": "3.9.5",
     "typescript": "6.0.3",
     "vitest": "4.1.8",
     "vitest-mock-express": "2.2.0"
