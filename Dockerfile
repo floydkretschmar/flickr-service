@@ -1,6 +1,6 @@
 # syntax = docker/dockerfile:1
 
-FROM node:24.16.0-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 as base
+FROM node:26.7.0-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 as base
 
 LABEL fly_launch_runtime="Node.js"
 
