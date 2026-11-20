@@ -15,7 +15,7 @@ ENV NODE_ENV="production"
 FROM base as build
 
 # Install node modules
-COPY --link package-lock.json package.json ./
+COPY --link .npmrc package-lock.json package.json ./
 RUN npm ci --include=dev
 
 # Copy application code
